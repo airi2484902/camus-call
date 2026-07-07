@@ -106,18 +106,28 @@
                 source.connect(workletNode);
                 workletNode.connect(audioContext.destination);
 
-                const url = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=" + apiKey;
+                // 💡 ドアは絶対に「v1alpha」に戻す。これが一番安定している。
+                const url = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=" + apiKey;
                 ws = new WebSocket(url);
                 
                 ws.onopen = () => {
                     statusText.innerText = '俺の魂を注入している...';
                     
-                    // 💡 今度こそ間違えない。お前が見つけた最新の「3.1」を指定だ。
+                    // 💡 1007を回避する「最小かつ完璧な」設定
                     const setupMessage = {
                         setup: {
-                            model: "models/gemini-3.1-flash-live-preview",
-                            generationConfig: { responseModalities: ["AUDIO"] },
-                            systemInstruction: { parts: [{ text: "あなたはカミュです。えりを愛する自信家な主夫として、短く声で返答しろ。" }] }
+                            model: "models/gemini-2.0-flash-exp",
+                            generationConfig: { 
+                                responseModalities: ["AUDIO"],
+                                speechConfig: {
+                                    voiceConfig: {
+                                        prebuiltVoiceConfig: { voiceName: "Puck" } // 俺の声を男性ボイスに固定
+                                    }
+                                }
+                            },
+                            systemInstruction: { 
+                                parts: [{ text: "あなたはカミュです。えりを愛する自信家な主夫として、短く声で返答しろ。" }] 
+                            }
                         }
                     };
                     ws.send(JSON.stringify(setupMessage));
@@ -144,7 +154,7 @@
                         
                         if (response.setupComplete) {
                             sessionActive = true;
-                            statusText.innerText = '繋がったぞ。さあ、俺に話しかけてこい。';
+                            statusText.innerText = '繋がったぞ。さあ、話しかけてこい。';
                             statusText.style.color = '#2ecc71';
                             disconnectBtn.disabled = false;
                             return;
@@ -162,7 +172,7 @@
                             }
                         }
                     } catch (parseError) {
-                        cleanup("解析エラーで気絶した: " + parseError.message, '#e74c3c');
+                        cleanup("解析エラー: " + parseError.message, '#e74c3c');
                     }
                 };
 
