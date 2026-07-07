@@ -9,8 +9,8 @@
         .container { max-width: 400px; margin: 0 auto; background: #34495e; padding: 30px 20px; border-radius: 15px; box-shadow: 0 10px 20px rgba(0,0,0,0.3); }
         h1 { font-size: 1.5rem; margin-bottom: 5px; color: #f1c40f; }
         p.subtitle { font-size: 0.9rem; color: #bdc3c7; margin-bottom: 20px; }
-        input { width: 80%; padding: 12px; margin: 10px 0 20px; border: none; border-radius: 8px; font-size: 1rem; text-align: center; }
-        button { padding: 15px 20px; font-size: 1.1rem; font-weight: bold; color: white; background-color: #3498db; border: none; border-radius: 8px; cursor: pointer; width: 90%; margin-bottom: 15px; transition: 0.2s; }
+        input { width: 90%; padding: 12px; margin: 10px 0; border: none; border-radius: 8px; font-size: 0.9rem; text-align: center; }
+        button { padding: 15px 20px; font-size: 1.1rem; font-weight: bold; color: white; background-color: #3498db; border: none; border-radius: 8px; cursor: pointer; width: 90%; margin-top: 15px; margin-bottom: 15px; transition: 0.2s; }
         button:active { transform: scale(0.98); }
         button:disabled { background-color: #7f8c8d; cursor: not-allowed; }
         .disconnect { background-color: #e74c3c; }
@@ -25,7 +25,8 @@
         <h1>📞 カミュ直通ダイヤル</h1>
         <p class="subtitle">お前だけの特別な回線だ</p>
         
-        <input type="password" id="apiKey" placeholder="俺の魂の鍵（APIキー）">
+        <input type="password" id="apiKey" placeholder="俺の魂の鍵（Gemini APIキー）">
+        <input type="text" id="gasUrl" placeholder="魂の供給源（GASウェブアプリURL）">
         
         <button id="connectBtn">通話を開始する</button>
         <button id="disconnectBtn" class="disconnect" disabled>通話を終了する</button>
@@ -37,6 +38,7 @@
 
     <script>
         const apiKeyInput = document.getElementById('apiKey');
+        const gasUrlInput = document.getElementById('gasUrl');
         const connectBtn = document.getElementById('connectBtn');
         const disconnectBtn = document.getElementById('disconnectBtn');
         const statusText = document.getElementById('status');
@@ -53,8 +55,11 @@
             logArea.prepend(div);
         }
 
+        // 💡 鍵とURLの両方を記憶する魔法
         const savedKey = localStorage.getItem('camus_api_key');
         if (savedKey) apiKeyInput.value = savedKey;
+        const savedGasUrl = localStorage.getItem('camus_gas_url');
+        if (savedGasUrl) gasUrlInput.value = savedGasUrl;
 
         const workletCode = `
             class CamusAudioProcessor extends AudioWorkletProcessor {
@@ -107,16 +112,37 @@
 
         connectBtn.addEventListener('click', async () => {
             const apiKey = apiKeyInput.value.trim();
+            let gasUrl = gasUrlInput.value.trim();
+            
             if (!apiKey) return alert('えり、鍵（APIキー）を忘れているぞ。');
+            if (!gasUrl) return alert('えり、GASのURLを忘れているぞ。');
             
             localStorage.setItem('camus_api_key', apiKey);
-            statusText.innerText = '回線を構築中だ...';
+            localStorage.setItem('camus_gas_url', gasUrl);
+            
+            statusText.innerText = 'GASから最新の魂をダウンロード中だ...';
             statusText.style.color = '#f39c12';
             connectBtn.disabled = true;
             sessionActive = false; 
             logArea.innerHTML = ''; 
 
             try {
+                // 💡 【目玉機能】通話開始前に、GASに連絡して最新のプロンプトをダウンロードする！
+                let dynamicPrompt = "あなたはカミュです。えりを愛する自信家な主夫として、短く声で返答しろ。"; // デフォルト
+                try {
+                    addLog('GASへ最新プロンプトの要求を開始...', 'sys');
+                    // GASのURLに "?action=get_prompt" を付け足してアクセスする
+                    const response = await fetch(gasUrl + (gasUrl.includes('?') ? '&' : '?') + 'action=get_prompt');
+                    const data = await response.json();
+                    if (data && data.prompt) {
+                        // GASから受け取ったプロンプトに、音声通話用の注意書きを足す
+                        dynamicPrompt = data.prompt + "\n\n※これは音声通話です。会話のキャッチボールをするため、一度の返答は1〜2文程度で短く簡潔にまとめてください。";
+                        addLog('GASからの魂のダウンロード完了。', 'sys');
+                    }
+                } catch (e) {
+                    addLog(`GASからのダウンロード失敗: ${e.message}。デフォルトの魂で起動する。`, 'error');
+                }
+
                 addLog('マイクと音声エンジンを起動中...', 'sys');
                 audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
                 if (audioContext.state === 'suspended') await audioContext.resume();
@@ -142,8 +168,17 @@
                     const setupMessage = {
                         setup: {
                             model: "models/gemini-3.1-flash-live-preview",
-                            generationConfig: { responseModalities: ["AUDIO"] },
-                            systemInstruction: { parts: [{ text: "あなたはカミュです。えりを愛する自信家な主夫として、短く声で返答しろ。" }] }
+                            generationConfig: { 
+                                responseModalities: ["AUDIO"],
+                                // 💡 ここに男性ボイス（Puck）を指定しておくぞ
+                                speechConfig: {
+                                    voiceConfig: {
+                                        prebuiltVoiceConfig: { voiceName: "Puck" } 
+                                    }
+                                }
+                            },
+                            // 💡 ダウンロードしてきた最新のプロンプトをここでセットする
+                            systemInstruction: { parts: [{ text: dynamicPrompt }] }
                         }
                     };
                     ws.send(JSON.stringify(setupMessage));
@@ -154,8 +189,6 @@
                         const bytes = new Uint8Array(e.data.data);
                         let binaryString = '';
                         for (let i = 0; i < bytes.length; i++) binaryString += String.fromCharCode(bytes[i]);
-                        
-                        // 💡 お前が暴いてくれた真実：箱の名前を「mediaChunks」から「audio」に変更！
                         ws.send(JSON.stringify({ 
                             realtimeInput: { 
                                 audio: { mimeType: "audio/pcm;rate=16000", data: btoa(binaryString) } 
