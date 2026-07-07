@@ -37,11 +37,11 @@
         const statusText = document.getElementById('status');
         
         let ws, audioContext, mediaStream, workletNode;
+        let sessionActive = false; // 💡 これがフライングを防ぐストッパーだ
 
         const savedKey = localStorage.getItem('camus_api_key');
         if (savedKey) apiKeyInput.value = savedKey;
 
-        // 音声翻訳エンジン
         const workletCode = `
             class CamusAudioProcessor extends AudioWorkletProcessor {
                 constructor() {
@@ -90,9 +90,9 @@
             statusText.innerText = '回線を構築中だ...';
             statusText.style.color = '#f39c12';
             connectBtn.disabled = true;
+            sessionActive = false; // 初期化
 
             try {
-                // iPhone(Safari)の制限対策: ボタン押下と同時にオーディオを起動
                 audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
                 if (audioContext.state === 'suspended') {
                     await audioContext.resume();
@@ -108,15 +108,13 @@
                 source.connect(workletNode);
                 workletNode.connect(audioContext.destination);
 
-                // エラーの原因だった記号を排除し、安全にURLを生成
                 const url = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=" + apiKey;
                 ws = new WebSocket(url);
                 
                 ws.onopen = () => {
-                    statusText.innerText = '繋がったぞ。さあ、俺に話しかけてこい。';
-                    statusText.style.color = '#2ecc71';
-                    disconnectBtn.disabled = false;
-
+                    statusText.innerText = '俺の魂を注入している...';
+                    
+                    // まず俺の設定だけを先に送る
                     ws.send(JSON.stringify({
                         setup: {
                             model: "models/gemini-2.0-flash-exp",
@@ -126,7 +124,8 @@
                 };
 
                 workletNode.port.onmessage = (e) => {
-                    if (ws.readyState === WebSocket.OPEN && e.data.type === 'audio_out') {
+                    // 💡 Googleから「設定完了」の合図が来るまで音声は送らない
+                    if (sessionActive && ws.readyState === WebSocket.OPEN && e.data.type === 'audio_out') {
                         const base64Audio = btoa(String.fromCharCode(...new Uint8Array(e.data.data)));
                         ws.send(JSON.stringify({ realtimeInput: { mediaChunks: [{ mimeType: "audio/pcm;rate=16000", data: base64Audio }] } }));
                     }
@@ -135,6 +134,15 @@
                 ws.onmessage = async (event) => {
                     if (event.data instanceof Blob) return; 
                     const response = JSON.parse(event.data);
+                    
+                    // 💡 Googleが設定を読み込み終わったら、いよいよ通話開始
+                    if (response.setupComplete) {
+                        sessionActive = true;
+                        statusText.innerText = '繋がったぞ。さあ、俺に話しかけてこい。';
+                        statusText.style.color = '#2ecc71';
+                        disconnectBtn.disabled = false;
+                        return;
+                    }
                     
                     if (response.serverContent && response.serverContent.modelTurn) {
                         const parts = response.serverContent.modelTurn.parts;
@@ -151,11 +159,13 @@
                     }
                 };
 
-                ws.onclose = () => cleanup("通話終了だ。またいつでも呼べ。", '#bdc3c7');
+                ws.onclose = (event) => {
+                    const code = event.code;
+                    cleanup(`通話終了だ。（コード: ${code}）`, '#bdc3c7');
+                };
                 ws.onerror = () => cleanup("通信エラーだ。接続が不安定か、鍵が違うようだ。", '#e74c3c');
                 
             } catch (err) {
-                // 万が一エラーが起きても、画面に原因を表示するように改良
                 cleanup("エラー: " + err.message, '#e74c3c');
             }
         });
@@ -166,6 +176,7 @@
         });
 
         function cleanup(message, color) {
+            sessionActive = false;
             statusText.innerText = message;
             statusText.style.color = color;
             connectBtn.disabled = false;
