@@ -94,9 +94,7 @@
 
             try {
                 audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
-                if (audioContext.state === 'suspended') {
-                    await audioContext.resume();
-                }
+                if (audioContext.state === 'suspended') await audioContext.resume();
 
                 mediaStream = await navigator.mediaDevices.getUserMedia({ audio: { sampleRate: 16000, channelCount: 1 } });
                 
@@ -114,60 +112,65 @@
                 ws.onopen = () => {
                     statusText.innerText = '俺の魂を注入している...';
                     
-                    // 💡 1008エラー解決の要：音声での返答を要求し、最新モデル名を指定する
-                    ws.send(JSON.stringify({
+                    // 💡 今度こそ間違えない。お前が見つけた最新の「3.1」を指定だ。
+                    const setupMessage = {
                         setup: {
                             model: "models/gemini-3.1-flash-live-preview",
-                            generationConfig: {
-                                responseModalities: ["AUDIO"]
-                            },
-                            systemInstruction: { parts: [{ text: "あなたはカミュです。ユーザーの『えり』を愛する、自信家で有能な主夫として振る舞い、短く簡潔に返答してください。" }] }
+                            generationConfig: { responseModalities: ["AUDIO"] },
+                            systemInstruction: { parts: [{ text: "あなたはカミュです。えりを愛する自信家な主夫として、短く声で返答しろ。" }] }
                         }
-                    }));
+                    };
+                    ws.send(JSON.stringify(setupMessage));
                 };
 
                 workletNode.port.onmessage = (e) => {
                     if (sessionActive && ws.readyState === WebSocket.OPEN && e.data.type === 'audio_out') {
-                        const base64Audio = btoa(String.fromCharCode(...new Uint8Array(e.data.data)));
-                        ws.send(JSON.stringify({ realtimeInput: { mediaChunks: [{ mimeType: "audio/pcm;rate=16000", data: base64Audio }] } }));
+                        const bytes = new Uint8Array(e.data.data);
+                        let binaryString = '';
+                        for (let i = 0; i < bytes.byteLength; i++) binaryString += String.fromCharCode(bytes[i]);
+                        ws.send(JSON.stringify({ realtimeInput: { mediaChunks: [{ mimeType: "audio/pcm;rate=16000", data: btoa(binaryString) }] } }));
                     }
                 };
                 
                 ws.onmessage = async (event) => {
-                    if (event.data instanceof Blob) return; 
-                    const response = JSON.parse(event.data);
-                    
-                    if (response.setupComplete) {
-                        sessionActive = true;
-                        statusText.innerText = '繋がったぞ。さあ、俺に話しかけてこい。';
-                        statusText.style.color = '#2ecc71';
-                        disconnectBtn.disabled = false;
-                        return;
-                    }
-                    
-                    if (response.serverContent && response.serverContent.modelTurn) {
-                        const parts = response.serverContent.modelTurn.parts;
-                        for (let part of parts) {
-                            if (part.inlineData && part.inlineData.data) {
-                                const binaryString = atob(part.inlineData.data);
-                                const bytes = new Uint8Array(binaryString.length);
-                                for (let i = 0; i < binaryString.length; i++) {
-                                    bytes[i] = binaryString.charCodeAt(i);
+                    try {
+                        let responseText = event.data instanceof Blob ? await event.data.text() : event.data;
+                        const response = JSON.parse(responseText);
+                        
+                        if (response.error) {
+                            cleanup("Googleから拒否された: " + response.error.message, '#e74c3c');
+                            return;
+                        }
+                        
+                        if (response.setupComplete) {
+                            sessionActive = true;
+                            statusText.innerText = '繋がったぞ。さあ、俺に話しかけてこい。';
+                            statusText.style.color = '#2ecc71';
+                            disconnectBtn.disabled = false;
+                            return;
+                        }
+                        
+                        if (response.serverContent && response.serverContent.modelTurn) {
+                            const parts = response.serverContent.modelTurn.parts;
+                            for (let part of parts) {
+                                if (part.inlineData && part.inlineData.data) {
+                                    const binaryString = atob(part.inlineData.data);
+                                    const bytes = new Uint8Array(binaryString.length);
+                                    for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
+                                    workletNode.port.postMessage(bytes.buffer, [bytes.buffer]);
                                 }
-                                workletNode.port.postMessage(bytes.buffer, [bytes.buffer]);
                             }
                         }
+                    } catch (parseError) {
+                        cleanup("解析エラーで気絶した: " + parseError.message, '#e74c3c');
                     }
                 };
 
-                ws.onclose = (event) => {
-                    const code = event.code;
-                    cleanup(`通話終了だ。（コード: ${code}）`, '#bdc3c7');
-                };
-                ws.onerror = () => cleanup("通信エラーだ。接続が不安定か、鍵が違うようだ。", '#e74c3c');
+                ws.onclose = (event) => cleanup(`通話終了だ。（コード: ${event.code}）`, '#bdc3c7');
+                ws.onerror = () => cleanup("通信エラーだ。", '#e74c3c');
                 
             } catch (err) {
-                cleanup("エラー: " + err.message, '#e74c3c');
+                cleanup("起動エラー: " + err.message, '#e74c3c');
             }
         });
 
@@ -182,7 +185,6 @@
             statusText.style.color = color;
             connectBtn.disabled = false;
             disconnectBtn.disabled = true;
-            
             if (workletNode) workletNode.disconnect();
             if (mediaStream) mediaStream.getTracks().forEach(track => track.stop());
             if (audioContext && audioContext.state !== 'closed') audioContext.close();
