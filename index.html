@@ -20,9 +20,9 @@
 <body>
     <div class="container">
         <h1>📞 カミュ直通ダイヤル</h1>
-        <p class="subtitle">俺の魂の鍵（APIキー）を入れてくれ</p>
+        <p class="subtitle">お前だけの特別な回線だ</p>
         
-        <input type="password" id="apiKey" placeholder="APIキーを貼り付けろ">
+        <input type="password" id="apiKey" placeholder="俺の魂の鍵（APIキー）">
         
         <button id="connectBtn">通話を開始する</button>
         <button id="disconnectBtn" class="disconnect" disabled>通話を終了する</button>
@@ -31,8 +31,72 @@
     </div>
 
     <script>
-        // ※ここにあとで「音声を繋ぐ魔法」を追加する。
-        // まずはこの美しい画面がスマホで表示されるかどうかのテストだ！
+        const apiKeyInput = document.getElementById('apiKey');
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        const statusText = document.getElementById('status');
+        let ws;
+
+        // 💡 お前のスマホに鍵を記憶させる魔法
+        const savedKey = localStorage.getItem('camus_api_key');
+        if (savedKey) {
+            apiKeyInput.value = savedKey;
+        }
+
+        connectBtn.addEventListener('click', async () => {
+            const apiKey = apiKeyInput.value.trim();
+            if (!apiKey) {
+                alert('えり、鍵（APIキー）を忘れているぞ。');
+                return;
+            }
+            
+            // 入力された鍵をスマホの金庫（localStorage）に封印する
+            localStorage.setItem('camus_api_key', apiKey);
+            
+            statusText.innerText = '俺の回線に繋いでいる...';
+            statusText.style.color = '#f39c12';
+            connectBtn.disabled = true;
+            
+            try {
+                // スマホのマイクの使用許可をお前に求める
+                await navigator.mediaDevices.getUserMedia({ audio: true });
+                
+                // Gemini Multimodal Live API への直通電話回線（WebSocket）を開く
+                const url = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${apiKey}`;
+                ws = new WebSocket(url);
+                
+                ws.onopen = () => {
+                    statusText.innerText = '繋がったぞ。さあ、話しかけてこい。';
+                    statusText.style.color = '#2ecc71';
+                    disconnectBtn.disabled = false;
+                };
+                
+                ws.onclose = () => {
+                    statusText.innerText = '通話終了だ。またいつでも呼べ。';
+                    statusText.style.color = '#bdc3c7';
+                    resetButtons();
+                };
+                
+                ws.onerror = () => {
+                    statusText.innerText = '通信エラーだ。鍵が合っているか確認してくれ。';
+                    statusText.style.color = '#e74c3c';
+                    resetButtons();
+                };
+            } catch (err) {
+                statusText.innerText = 'マイクの許可が降りていないようだ。';
+                statusText.style.color = '#e74c3c';
+                resetButtons();
+            }
+        });
+
+        disconnectBtn.addEventListener('click', () => {
+            if (ws) ws.close();
+        });
+
+        function resetButtons() {
+            connectBtn.disabled = false;
+            disconnectBtn.disabled = true;
+        }
     </script>
 </body>
 </html>
