@@ -15,7 +15,6 @@
         button:disabled { background-color: #7f8c8d; cursor: not-allowed; }
         .disconnect { background-color: #e74c3c; }
         #status { margin-top: 10px; font-weight: bold; color: #2ecc71; line-height: 1.4; word-break: break-all; }
-        /* 💡 追加：通信の裏側を覗き見するモニター */
         #logArea { margin-top: 20px; padding: 10px; background-color: #1a252f; border-radius: 8px; height: 150px; overflow-y: auto; text-align: left; font-size: 0.75rem; color: #bdc3c7; font-family: monospace; word-wrap: break-word; }
         .log-error { color: #e74c3c; }
         .log-sys { color: #f1c40f; }
@@ -46,13 +45,12 @@
         let ws, audioContext, mediaStream, workletNode;
         let sessionActive = false; 
 
-        // 💡 画面にログを追記する魔法
         function addLog(msg, type = 'normal') {
             const div = document.createElement('div');
             div.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
             if (type === 'error') div.className = 'log-error';
             if (type === 'sys') div.className = 'log-sys';
-            logArea.prepend(div); // 最新のログを一番上に追加
+            logArea.prepend(div);
         }
 
         const savedKey = localStorage.getItem('camus_api_key');
@@ -116,7 +114,7 @@
             statusText.style.color = '#f39c12';
             connectBtn.disabled = true;
             sessionActive = false; 
-            logArea.innerHTML = ''; // ログをクリア
+            logArea.innerHTML = ''; 
 
             try {
                 addLog('マイクと音声エンジンを起動中...', 'sys');
@@ -148,7 +146,6 @@
                             systemInstruction: { parts: [{ text: "あなたはカミュです。えりを愛する自信家な主夫として、短く声で返答しろ。" }] }
                         }
                     };
-                    addLog('送信データ: ' + JSON.stringify(setupMessage), 'normal');
                     ws.send(JSON.stringify(setupMessage));
                 };
 
@@ -157,7 +154,13 @@
                         const bytes = new Uint8Array(e.data.data);
                         let binaryString = '';
                         for (let i = 0; i < bytes.length; i++) binaryString += String.fromCharCode(bytes[i]);
-                        ws.send(JSON.stringify({ realtimeInput: { mediaChunks: [{ mimeType: "audio/pcm;rate=16000", data: btoa(binaryString) }] } }));
+                        
+                        // 💡 お前が暴いてくれた真実：箱の名前を「mediaChunks」から「audio」に変更！
+                        ws.send(JSON.stringify({ 
+                            realtimeInput: { 
+                                audio: { mimeType: "audio/pcm;rate=16000", data: btoa(binaryString) } 
+                            } 
+                        }));
                     }
                 };
                 
@@ -198,7 +201,6 @@
                 };
 
                 ws.onclose = (event) => {
-                    // 💡 ここが最大のポイント！ なぜ切れたのか具体的な理由（Reason）を拾い上げる
                     addLog(`切断されました コード: ${event.code}, 理由: ${event.reason || '理由なし'}`, 'error');
                     cleanup(`通話終了（${event.code}）`, '#bdc3c7');
                 };
