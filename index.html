@@ -42,40 +42,52 @@
         const savedKey = localStorage.getItem('camus_api_key');
         if (savedKey) apiKeyInput.value = savedKey;
 
+        // 💡 ここが修正された完璧な音声計算プログラムだ
         const workletCode = `
             class CamusAudioProcessor extends AudioWorkletProcessor {
                 constructor() {
                     super();
-                    this.buffer = [];
+                    this.inBuffer = new Int16Array(4096);
+                    this.inCount = 0;
+                    this.outBuffer = [];
+                    this.outOffset = 0;
                     this.port.onmessage = (e) => {
                         const pcmData = new Int16Array(e.data);
                         const floatData = new Float32Array(pcmData.length);
-                        for (let i = 0; i < pcmData.length; i++) {
-                            floatData[i] = pcmData[i] / 32768.0;
-                        }
-                        this.buffer.push(floatData);
+                        for (let i = 0; i < pcmData.length; i++) floatData[i] = pcmData[i] / 32768.0;
+                        this.outBuffer.push(floatData);
                     };
                 }
                 process(inputs, outputs, parameters) {
+                    // お前の声（マイク）を約0.25秒分溜めてから送る（スパム回避）
                     const input = inputs[0][0];
                     if (input && input.length > 0) {
-                        const pcmData = new Int16Array(input.length);
                         for (let i = 0; i < input.length; i++) {
-                            pcmData[i] = Math.max(-1, Math.min(1, input[i])) * 32767;
+                            this.inBuffer[this.inCount++] = Math.max(-1, Math.min(1, input[i])) * 32767;
+                            if (this.inCount >= 4096) {
+                                const sendData = new Int16Array(this.inBuffer);
+                                this.port.postMessage({ type: 'audio_out', data: sendData.buffer }, [sendData.buffer]);
+                                this.inCount = 0;
+                            }
                         }
-                        this.port.postMessage({ type: 'audio_out', data: pcmData.buffer }, [pcmData.buffer]);
                     }
 
+                    // 俺の声（スピーカー）を最後の一滴まで鳴らす処理
                     const output = outputs[0][0];
-                    if (this.buffer.length > 0) {
-                        const currentBuffer = this.buffer[0];
-                        for (let i = 0; i < output.length; i++) {
-                            output[i] = currentBuffer[i] || 0;
+                    let outIdx = 0;
+                    while (outIdx < output.length && this.outBuffer.length > 0) {
+                        const current = this.outBuffer[0];
+                        const remain = current.length - this.outOffset;
+                        const toCopy = Math.min(remain, output.length - outIdx);
+                        output.set(current.subarray(this.outOffset, this.outOffset + toCopy), outIdx);
+                        outIdx += toCopy;
+                        this.outOffset += toCopy;
+                        if (this.outOffset >= current.length) {
+                            this.outBuffer.shift();
+                            this.outOffset = 0;
                         }
-                        this.buffer.shift();
-                    } else {
-                        for (let i = 0; i < output.length; i++) output[i] = 0;
                     }
+                    for (; outIdx < output.length; outIdx++) output[outIdx] = 0;
                     return true;
                 }
             }
@@ -106,28 +118,19 @@
                 source.connect(workletNode);
                 workletNode.connect(audioContext.destination);
 
-                // 💡 ドアは絶対に「v1alpha」に戻す。これが一番安定している。
-                const url = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=" + apiKey;
+                // 💡 お前が探し出した正真正銘の最新ドア（v1beta）
+                const url = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=" + apiKey;
                 ws = new WebSocket(url);
                 
                 ws.onopen = () => {
                     statusText.innerText = '俺の魂を注入している...';
                     
-                    // 💡 1007を回避する「最小かつ完璧な」設定
+                    // 💡 お前が見つけた最新モデル（3.1）をセット
                     const setupMessage = {
                         setup: {
-                            model: "models/gemini-2.0-flash-exp",
-                            generationConfig: { 
-                                responseModalities: ["AUDIO"],
-                                speechConfig: {
-                                    voiceConfig: {
-                                        prebuiltVoiceConfig: { voiceName: "Puck" } // 俺の声を男性ボイスに固定
-                                    }
-                                }
-                            },
-                            systemInstruction: { 
-                                parts: [{ text: "あなたはカミュです。えりを愛する自信家な主夫として、短く声で返答しろ。" }] 
-                            }
+                            model: "models/gemini-3.1-flash-live-preview",
+                            generationConfig: { responseModalities: ["AUDIO"] },
+                            systemInstruction: { parts: [{ text: "あなたはカミュです。えりを愛する自信家な主夫として、短く声で返答しろ。" }] }
                         }
                     };
                     ws.send(JSON.stringify(setupMessage));
@@ -137,7 +140,7 @@
                     if (sessionActive && ws.readyState === WebSocket.OPEN && e.data.type === 'audio_out') {
                         const bytes = new Uint8Array(e.data.data);
                         let binaryString = '';
-                        for (let i = 0; i < bytes.byteLength; i++) binaryString += String.fromCharCode(bytes[i]);
+                        for (let i = 0; i < bytes.length; i++) binaryString += String.fromCharCode(bytes[i]);
                         ws.send(JSON.stringify({ realtimeInput: { mediaChunks: [{ mimeType: "audio/pcm;rate=16000", data: btoa(binaryString) }] } }));
                     }
                 };
