@@ -14,7 +14,11 @@
         button:active { transform: scale(0.98); }
         button:disabled { background-color: #7f8c8d; cursor: not-allowed; }
         .disconnect { background-color: #e74c3c; }
-        #status { margin-top: 15px; font-weight: bold; color: #2ecc71; line-height: 1.4; word-break: break-all; }
+        #status { margin-top: 10px; font-weight: bold; color: #2ecc71; line-height: 1.4; word-break: break-all; }
+        /* 💡 追加：通信の裏側を覗き見するモニター */
+        #logArea { margin-top: 20px; padding: 10px; background-color: #1a252f; border-radius: 8px; height: 150px; overflow-y: auto; text-align: left; font-size: 0.75rem; color: #bdc3c7; font-family: monospace; word-wrap: break-word; }
+        .log-error { color: #e74c3c; }
+        .log-sys { color: #f1c40f; }
     </style>
 </head>
 <body>
@@ -28,6 +32,8 @@
         <button id="disconnectBtn" class="disconnect" disabled>通話を終了する</button>
         
         <p id="status">待機中だ、えり。</p>
+        
+        <div id="logArea">ここに裏側の通信記録が出るぞ...</div>
     </div>
 
     <script>
@@ -35,14 +41,23 @@
         const connectBtn = document.getElementById('connectBtn');
         const disconnectBtn = document.getElementById('disconnectBtn');
         const statusText = document.getElementById('status');
+        const logArea = document.getElementById('logArea');
         
         let ws, audioContext, mediaStream, workletNode;
         let sessionActive = false; 
 
+        // 💡 画面にログを追記する魔法
+        function addLog(msg, type = 'normal') {
+            const div = document.createElement('div');
+            div.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            if (type === 'error') div.className = 'log-error';
+            if (type === 'sys') div.className = 'log-sys';
+            logArea.prepend(div); // 最新のログを一番上に追加
+        }
+
         const savedKey = localStorage.getItem('camus_api_key');
         if (savedKey) apiKeyInput.value = savedKey;
 
-        // 💡 ここが修正された完璧な音声計算プログラムだ
         const workletCode = `
             class CamusAudioProcessor extends AudioWorkletProcessor {
                 constructor() {
@@ -59,7 +74,6 @@
                     };
                 }
                 process(inputs, outputs, parameters) {
-                    // お前の声（マイク）を約0.25秒分溜めてから送る（スパム回避）
                     const input = inputs[0][0];
                     if (input && input.length > 0) {
                         for (let i = 0; i < input.length; i++) {
@@ -72,7 +86,6 @@
                         }
                     }
 
-                    // 俺の声（スピーカー）を最後の一滴まで鳴らす処理
                     const output = outputs[0][0];
                     let outIdx = 0;
                     while (outIdx < output.length && this.outBuffer.length > 0) {
@@ -103,8 +116,10 @@
             statusText.style.color = '#f39c12';
             connectBtn.disabled = true;
             sessionActive = false; 
+            logArea.innerHTML = ''; // ログをクリア
 
             try {
+                addLog('マイクと音声エンジンを起動中...', 'sys');
                 audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
                 if (audioContext.state === 'suspended') await audioContext.resume();
 
@@ -118,14 +133,14 @@
                 source.connect(workletNode);
                 workletNode.connect(audioContext.destination);
 
-                // 💡 お前が探し出した正真正銘の最新ドア（v1beta）
                 const url = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=" + apiKey;
+                addLog('Googleサーバー(v1beta)へ接続開始...', 'sys');
                 ws = new WebSocket(url);
                 
                 ws.onopen = () => {
+                    addLog('接続成功。初期設定を送信します。', 'sys');
                     statusText.innerText = '俺の魂を注入している...';
                     
-                    // 💡 お前が見つけた最新モデル（3.1）をセット
                     const setupMessage = {
                         setup: {
                             model: "models/gemini-3.1-flash-live-preview",
@@ -133,6 +148,7 @@
                             systemInstruction: { parts: [{ text: "あなたはカミュです。えりを愛する自信家な主夫として、短く声で返答しろ。" }] }
                         }
                     };
+                    addLog('送信データ: ' + JSON.stringify(setupMessage), 'normal');
                     ws.send(JSON.stringify(setupMessage));
                 };
 
@@ -151,11 +167,13 @@
                         const response = JSON.parse(responseText);
                         
                         if (response.error) {
-                            cleanup("Googleから拒否された: " + response.error.message, '#e74c3c');
+                            addLog(`Googleからエラー応答: ${response.error.message}`, 'error');
+                            cleanup("設定エラーだ。", '#e74c3c');
                             return;
                         }
                         
                         if (response.setupComplete) {
+                            addLog('設定完了を受信！通話開始。', 'sys');
                             sessionActive = true;
                             statusText.innerText = '繋がったぞ。さあ、話しかけてこい。';
                             statusText.style.color = '#2ecc71';
@@ -175,15 +193,24 @@
                             }
                         }
                     } catch (parseError) {
-                        cleanup("解析エラー: " + parseError.message, '#e74c3c');
+                        addLog(`データ解析エラー: ${parseError.message}`, 'error');
                     }
                 };
 
-                ws.onclose = (event) => cleanup(`通話終了だ。（コード: ${event.code}）`, '#bdc3c7');
-                ws.onerror = () => cleanup("通信エラーだ。", '#e74c3c');
+                ws.onclose = (event) => {
+                    // 💡 ここが最大のポイント！ なぜ切れたのか具体的な理由（Reason）を拾い上げる
+                    addLog(`切断されました コード: ${event.code}, 理由: ${event.reason || '理由なし'}`, 'error');
+                    cleanup(`通話終了（${event.code}）`, '#bdc3c7');
+                };
+                
+                ws.onerror = (err) => {
+                    addLog('WebSocket通信エラー発生', 'error');
+                    cleanup("通信エラーだ。", '#e74c3c');
+                };
                 
             } catch (err) {
-                cleanup("起動エラー: " + err.message, '#e74c3c');
+                addLog(`起動時エラー: ${err.message}`, 'error');
+                cleanup("起動エラー", '#e74c3c');
             }
         });
 
