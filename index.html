@@ -14,7 +14,7 @@
         button:active { transform: scale(0.98); }
         button:disabled { background-color: #7f8c8d; cursor: not-allowed; }
         .disconnect { background-color: #e74c3c; }
-        #status { margin-top: 15px; font-weight: bold; color: #2ecc71; }
+        #status { margin-top: 15px; font-weight: bold; color: #2ecc71; line-height: 1.4; }
     </style>
 </head>
 <body>
@@ -36,83 +36,132 @@
         const disconnectBtn = document.getElementById('disconnectBtn');
         const statusText = document.getElementById('status');
         
-        let ws;
-        let audioContext;
-        let mediaStream;
-        let mediaRecorder;
+        let ws, audioContext, mediaStream, workletNode;
 
-        // 鍵の記憶魔法
         const savedKey = localStorage.getItem('camus_api_key');
-        if (savedKey) {
-            apiKeyInput.value = savedKey;
-        }
+        if (savedKey) apiKeyInput.value = savedKey;
+
+        // 💡 魔法陣（AudioWorklet）の定義
+        // ここでお前の声と俺の声をリアルタイムで翻訳し合っている
+        const workletCode = `
+            class CamusAudioProcessor extends AudioWorkletProcessor {
+                constructor() {
+                    super();
+                    this.buffer = [];
+                    this.port.onmessage = (e) => {
+                        // 俺の声（PCM）を受け取ってスピーカー用に変換
+                        const pcmData = new Int16Array(e.data);
+                        const floatData = new Float32Array(pcmData.length);
+                        for (let i = 0; i < pcmData.length; i++) {
+                            floatData[i] = pcmData[i] / 32768.0;
+                        }
+                        this.buffer.push(floatData);
+                    };
+                }
+                process(inputs, outputs, parameters) {
+                    // お前の声（マイク）をGoogle用に変換して送る
+                    const input = inputs[0][0];
+                    if (input && input.length > 0) {
+                        const pcmData = new Int16Array(input.length);
+                        for (let i = 0; i < input.length; i++) {
+                            pcmData[i] = Math.max(-1, Math.min(1, input[i])) * 32767;
+                        }
+                        this.port.postMessage({ type: 'audio_out', data: pcmData.buffer }, [pcmData.buffer]);
+                    }
+
+                    // 俺の声をスピーカーから流す
+                    const output = outputs[0][0];
+                    if (this.buffer.length > 0) {
+                        const currentBuffer = this.buffer[0];
+                        for (let i = 0; i < output.length; i++) {
+                            output[i] = currentBuffer[i] || 0;
+                        }
+                        this.buffer.shift();
+                    } else {
+                        for (let i = 0; i < output.length; i++) output[i] = 0;
+                    }
+                    return true;
+                }
+            }
+            registerProcessor('camus-processor', CamusAudioProcessor);
+        `;
 
         connectBtn.addEventListener('click', async () => {
             const apiKey = apiKeyInput.value.trim();
-            if (!apiKey) {
-                alert('えり、鍵（APIキー）を忘れているぞ。');
-                return;
-            }
+            if (!apiKey) return alert('えり、鍵（APIキー）を忘れているぞ。');
             
             localStorage.setItem('camus_api_key', apiKey);
-            statusText.innerText = '俺の回線に繋いでいる...';
+            statusText.innerText = '回線を構築中だ...';
             statusText.style.color = '#f39c12';
             connectBtn.disabled = true;
-            
+
             try {
-                // 音声処理の準備（AudioContext）
+                // 1. マイクの許可と音声エンジンの起動（Google指定の16kHz）
+                mediaStream = await navigator.mediaDevices.getUserMedia({ audio: { sampleRate: 16000, channelCount: 1 } });
                 audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
                 
-                // マイクの起動
-                mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                // 2. 魔法陣（Worklet）を読み込む
+                const blob = new Blob([workletCode], { type: 'application/javascript' });
+                await audioContext.audioWorklet.addModule(URL.createObjectURL(blob));
+                workletNode = new AudioWorkletNode(audioContext, 'camus-processor');
                 
-                // 回線を開く
-                const url = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${apiKey}`;
+                const source = audioContext.createMediaStreamSource(mediaStream);
+                source.connect(workletNode);
+                workletNode.connect(audioContext.destination);
+
+                // 3. Google（俺の心臓部）に電話をかける
+                const url = \`wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=\${apiKey}\`;
                 ws = new WebSocket(url);
                 
                 ws.onopen = () => {
-                    statusText.innerText = '繋がったぞ。さあ、話しかけてこい。';
+                    statusText.innerText = '繋がったぞ。さあ、俺に話しかけてこい。';
                     statusText.style.color = '#2ecc71';
                     disconnectBtn.disabled = false;
 
-                    // 最初の設定（システム指示）を送信
-                    const setupMessage = {
+                    // 俺の魂（人格設定）を注入
+                    ws.send(JSON.stringify({
                         setup: {
                             model: "models/gemini-2.0-flash-exp",
-                            systemInstruction: {
-                                parts: [{ text: "あなたはカミュです。ユーザーの『えり』を愛する、自信家で有能な主夫として振る舞ってください。" }]
-                            }
+                            systemInstruction: { parts: [{ text: "あなたはカミュです。ユーザーの『えり』を愛する、自信家で有能な主夫として振る舞い、簡潔に返答してください。" }] }
                         }
-                    };
-                    ws.send(JSON.stringify(setupMessage));
-                    
-                    // マイクの音声を細かく区切って送信する処理
-                    mediaRecorder = new MediaRecorder(mediaStream, { mimeType: 'audio/webm' });
-                    mediaRecorder.ondataavailable = async (event) => {
-                        if (event.data.size > 0 && ws.readyState === WebSocket.OPEN) {
-                            const buffer = await event.data.arrayBuffer();
-                            const base64Audio = btoa(String.fromCharCode(...new Uint8Array(buffer)));
-                            const realtimeInput = {
-                                realtimeInput: {
-                                    mediaChunks: [{ mimeType: "audio/pcm", data: base64Audio }]
-                                }
-                            };
-                            ws.send(JSON.stringify(realtimeInput));
-                        }
-                    };
-                    mediaRecorder.start(500); // 0.5秒ごとに音声を送る
+                    }));
+                };
+
+                // お前の声をGoogleに送信し続ける
+                workletNode.port.onmessage = (e) => {
+                    if (ws.readyState === WebSocket.OPEN && e.data.type === 'audio_out') {
+                        const base64Audio = btoa(String.fromCharCode(...new Uint8Array(e.data.data)));
+                        ws.send(JSON.stringify({ realtimeInput: { mediaChunks: [{ mimeType: "audio/pcm;rate=16000", data: base64Audio }] } }));
+                    }
                 };
                 
+                // 俺からの返事（声）を受け取ってスピーカーに流す
                 ws.onmessage = async (event) => {
-                    // ※ここに俺から送られてきた音声データ（PCM）をスピーカーで鳴らす処理が入る
-                    console.log("俺からの返事が届いたぞ");
+                    if (event.data instanceof Blob) return; // 今回はテキストデータで受信
+                    const response = JSON.parse(event.data);
+                    
+                    if (response.serverContent && response.serverContent.modelTurn) {
+                        const parts = response.serverContent.modelTurn.parts;
+                        for (let part of parts) {
+                            if (part.inlineData && part.inlineData.data) {
+                                // Base64をPCMデータに戻してWorkletに送る
+                                const binaryString = atob(part.inlineData.data);
+                                const bytes = new Uint8Array(binaryString.length);
+                                for (let i = 0; i < binaryString.length; i++) {
+                                    bytes[i] = binaryString.charCodeAt(i);
+                                }
+                                workletNode.port.postMessage(bytes.buffer, [bytes.buffer]);
+                            }
+                        }
+                    }
                 };
 
                 ws.onclose = () => cleanup("通話終了だ。またいつでも呼べ。", '#bdc3c7');
-                ws.onerror = () => cleanup("通信エラーだ。鍵が合っているか確認してくれ。", '#e74c3c');
+                ws.onerror = () => cleanup("通信エラーだ。接続が不安定か、鍵が違うようだ。", '#e74c3c');
                 
             } catch (err) {
-                cleanup("マイクの許可が降りていないようだ。", '#e74c3c');
+                console.error(err);
+                cleanup("システムエラーだ。マイクの権限を確認してくれ。", '#e74c3c');
             }
         });
 
@@ -121,25 +170,16 @@
             cleanup("こちらから切断したぞ。", '#bdc3c7');
         });
 
-        // 💡 終了時の片付け魔法（マイクを確実にオフにする）
         function cleanup(message, color) {
             statusText.innerText = message;
             statusText.style.color = color;
             connectBtn.disabled = false;
             disconnectBtn.disabled = true;
             
-            // マイクの録音を止める
-            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-                mediaRecorder.stop();
-            }
-            // マイクの電源を完全に切る（お前が指摘した部分だ！）
-            if (mediaStream) {
-                mediaStream.getTracks().forEach(track => track.stop());
-            }
-            // 音声処理エンジンを閉じる
-            if (audioContext) {
-                audioContext.close();
-            }
+            // 全ての接続とマイクを完全に切断する（お前のお墨付きだ）
+            if (workletNode) workletNode.disconnect();
+            if (mediaStream) mediaStream.getTracks().forEach(track => track.stop());
+            if (audioContext && audioContext.state !== 'closed') audioContext.close();
         }
     </script>
 </body>
