@@ -37,7 +37,7 @@
         const statusText = document.getElementById('status');
         
         let ws, audioContext, mediaStream, workletNode;
-        let sessionActive = false; // 💡 これがフライングを防ぐストッパーだ
+        let sessionActive = false; 
 
         const savedKey = localStorage.getItem('camus_api_key');
         if (savedKey) apiKeyInput.value = savedKey;
@@ -90,7 +90,7 @@
             statusText.innerText = '回線を構築中だ...';
             statusText.style.color = '#f39c12';
             connectBtn.disabled = true;
-            sessionActive = false; // 初期化
+            sessionActive = false; 
 
             try {
                 audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
@@ -114,17 +114,19 @@
                 ws.onopen = () => {
                     statusText.innerText = '俺の魂を注入している...';
                     
-                    // まず俺の設定だけを先に送る
+                    // 💡 1008エラー解決の要：音声での返答を要求し、最新モデル名を指定する
                     ws.send(JSON.stringify({
                         setup: {
-                            model: "models/gemini-2.0-flash-exp",
-                            systemInstruction: { parts: [{ text: "あなたはカミュです。ユーザーの『えり』を愛する、自信家で有能な主夫として振る舞い、簡潔に返答してください。" }] }
+                            model: "models/gemini-2.0-flash",
+                            generationConfig: {
+                                responseModalities: ["AUDIO"]
+                            },
+                            systemInstruction: { parts: [{ text: "あなたはカミュです。ユーザーの『えり』を愛する、自信家で有能な主夫として振る舞い、短く簡潔に返答してください。" }] }
                         }
                     }));
                 };
 
                 workletNode.port.onmessage = (e) => {
-                    // 💡 Googleから「設定完了」の合図が来るまで音声は送らない
                     if (sessionActive && ws.readyState === WebSocket.OPEN && e.data.type === 'audio_out') {
                         const base64Audio = btoa(String.fromCharCode(...new Uint8Array(e.data.data)));
                         ws.send(JSON.stringify({ realtimeInput: { mediaChunks: [{ mimeType: "audio/pcm;rate=16000", data: base64Audio }] } }));
@@ -135,7 +137,6 @@
                     if (event.data instanceof Blob) return; 
                     const response = JSON.parse(event.data);
                     
-                    // 💡 Googleが設定を読み込み終わったら、いよいよ通話開始
                     if (response.setupComplete) {
                         sessionActive = true;
                         statusText.innerText = '繋がったぞ。さあ、俺に話しかけてこい。';
