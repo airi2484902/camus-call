@@ -106,7 +106,7 @@
                 source.connect(workletNode);
                 workletNode.connect(audioContext.destination);
 
-                const url = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=" + apiKey;
+                const url = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=" + apiKey;
                 ws = new WebSocket(url);
                 
                 ws.onopen = () => {
