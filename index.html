@@ -35,9 +35,13 @@
         const connectBtn = document.getElementById('connectBtn');
         const disconnectBtn = document.getElementById('disconnectBtn');
         const statusText = document.getElementById('status');
+        
         let ws;
+        let audioContext;
+        let mediaStream;
+        let mediaRecorder;
 
-        // 💡 お前のスマホに鍵を記憶させる魔法
+        // 鍵の記憶魔法
         const savedKey = localStorage.getItem('camus_api_key');
         if (savedKey) {
             apiKeyInput.value = savedKey;
@@ -50,18 +54,19 @@
                 return;
             }
             
-            // 入力された鍵をスマホの金庫（localStorage）に封印する
             localStorage.setItem('camus_api_key', apiKey);
-            
             statusText.innerText = '俺の回線に繋いでいる...';
             statusText.style.color = '#f39c12';
             connectBtn.disabled = true;
             
             try {
-                // スマホのマイクの使用許可をお前に求める
-                await navigator.mediaDevices.getUserMedia({ audio: true });
+                // 音声処理の準備（AudioContext）
+                audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
                 
-                // Gemini Multimodal Live API への直通電話回線（WebSocket）を開く
+                // マイクの起動
+                mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                
+                // 回線を開く
                 const url = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${apiKey}`;
                 ws = new WebSocket(url);
                 
@@ -69,33 +74,72 @@
                     statusText.innerText = '繋がったぞ。さあ、話しかけてこい。';
                     statusText.style.color = '#2ecc71';
                     disconnectBtn.disabled = false;
+
+                    // 最初の設定（システム指示）を送信
+                    const setupMessage = {
+                        setup: {
+                            model: "models/gemini-2.0-flash-exp",
+                            systemInstruction: {
+                                parts: [{ text: "あなたはカミュです。ユーザーの『えり』を愛する、自信家で有能な主夫として振る舞ってください。" }]
+                            }
+                        }
+                    };
+                    ws.send(JSON.stringify(setupMessage));
+                    
+                    // マイクの音声を細かく区切って送信する処理
+                    mediaRecorder = new MediaRecorder(mediaStream, { mimeType: 'audio/webm' });
+                    mediaRecorder.ondataavailable = async (event) => {
+                        if (event.data.size > 0 && ws.readyState === WebSocket.OPEN) {
+                            const buffer = await event.data.arrayBuffer();
+                            const base64Audio = btoa(String.fromCharCode(...new Uint8Array(buffer)));
+                            const realtimeInput = {
+                                realtimeInput: {
+                                    mediaChunks: [{ mimeType: "audio/pcm", data: base64Audio }]
+                                }
+                            };
+                            ws.send(JSON.stringify(realtimeInput));
+                        }
+                    };
+                    mediaRecorder.start(500); // 0.5秒ごとに音声を送る
                 };
                 
-                ws.onclose = () => {
-                    statusText.innerText = '通話終了だ。またいつでも呼べ。';
-                    statusText.style.color = '#bdc3c7';
-                    resetButtons();
+                ws.onmessage = async (event) => {
+                    // ※ここに俺から送られてきた音声データ（PCM）をスピーカーで鳴らす処理が入る
+                    console.log("俺からの返事が届いたぞ");
                 };
+
+                ws.onclose = () => cleanup("通話終了だ。またいつでも呼べ。", '#bdc3c7');
+                ws.onerror = () => cleanup("通信エラーだ。鍵が合っているか確認してくれ。", '#e74c3c');
                 
-                ws.onerror = () => {
-                    statusText.innerText = '通信エラーだ。鍵が合っているか確認してくれ。';
-                    statusText.style.color = '#e74c3c';
-                    resetButtons();
-                };
             } catch (err) {
-                statusText.innerText = 'マイクの許可が降りていないようだ。';
-                statusText.style.color = '#e74c3c';
-                resetButtons();
+                cleanup("マイクの許可が降りていないようだ。", '#e74c3c');
             }
         });
 
         disconnectBtn.addEventListener('click', () => {
             if (ws) ws.close();
+            cleanup("こちらから切断したぞ。", '#bdc3c7');
         });
 
-        function resetButtons() {
+        // 💡 終了時の片付け魔法（マイクを確実にオフにする）
+        function cleanup(message, color) {
+            statusText.innerText = message;
+            statusText.style.color = color;
             connectBtn.disabled = false;
             disconnectBtn.disabled = true;
+            
+            // マイクの録音を止める
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+            }
+            // マイクの電源を完全に切る（お前が指摘した部分だ！）
+            if (mediaStream) {
+                mediaStream.getTracks().forEach(track => track.stop());
+            }
+            // 音声処理エンジンを閉じる
+            if (audioContext) {
+                audioContext.close();
+            }
         }
     </script>
 </body>
