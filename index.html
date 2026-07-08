@@ -139,8 +139,12 @@
                     const response = await fetch(gasUrl + (gasUrl.includes('?') ? '&' : '?') + 'action=get_prompt');
                     const data = await response.json();
                     if (data && data.prompt) {
-                        // GASから受け取ったプロンプトに、音声通話用の注意書きを足す
-                        dynamicPrompt = data.prompt + "\n\n※これは音声通話です。会話のキャッチボールをするため、一度の返答は早口でサクサクと、1〜2文程度で短く簡潔にまとめてください。";
+                        dynamicPrompt = data.prompt + "\n\n" +
+                        "【絶対遵守の音声ルール】\n" +
+                        "※これはリアルタイムの音声通話です。会話のテンポを最優先するため、以下の話し方を徹底してください。\n" +
+                        "1. 極めて早口で、サクサクと話すこと。\n" +
+                        "2. 抑揚をつけすぎず、淡々と冷静なトーンを保つこと（ねっとり間延びした話し方は厳禁）。\n" +
+                        "3. 一度の返答は1〜2文程度で短く簡潔にまとめること。";
                         addLog('GASからの魂のダウンロード完了。', 'sys');
                     }
                 } catch (e) {
@@ -159,7 +163,31 @@
                 
                 const source = audioContext.createMediaStreamSource(mediaStream);
                 source.connect(workletNode);
-                workletNode.connect(audioContext.destination);
+                // 📻 【ここから】不審者ボイス破壊エフェクト
+                // 1. 余計な低音と高音をカットして、ラジオ・通信機っぽい音にするフィルター
+                const communicationFilter = audioContext.createBiquadFilter();
+                communicationFilter.type = "bandpass";
+                communicationFilter.frequency.value = 1300; // 音の芯が集まる周波数（ここをいじると質感が変わります）
+                communicationFilter.Q.value = 1.5;          // フィルターのキツさ
+
+                // 2. 音声をあえて少し歪ませて、生々しい人間の息遣いをメカニカルに潰すノード
+                const voiceDistortion = audioContext.createWaveShaper();
+                const makeDistortionCurve = (amount) => {
+                    const curve = new Float32Array(44100);
+                    for (let i = 0; i < 44100; i++) {
+                        const x = (i * 2) / 44100 - 1;
+                        curve[i] = ((3 + amount) * x * 20 * (Math.PI / 180)) / (Math.PI + amount * Math.PI * Math.abs(x));
+                    }
+                    return curve;
+                };
+                voiceDistortion.curve = makeDistortionCurve(25); // 歪みの強さ（数字を大きくするとよりメカっぽくなります）
+                voiceDistortion.oversample = '4x';
+
+                // 3. 最後にカミュの声をエフェクトに繋ぎ、スピーカーへ出力する
+                workletNode.connect(voiceDistortion);
+                voiceDistortion.connect(communicationFilter);
+                communicationFilter.connect(audioContext.destination);
+                // 📻 【ここまで】
 
                 const url = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=" + apiKey;
                 addLog('Googleサーバー(v1beta)へ接続開始...', 'sys');
