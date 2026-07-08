@@ -47,6 +47,7 @@
         let ws, audioContext, mediaStream, workletNode;
         let sessionActive = false; 
         let currentTurnText = ""; // 💡 追加：カミュのセリフを一時的に溜めるバケツ
+        let fullTranscript = ""; // 🚀 追加：通話全体のセリフを記録するバケツ
         // 🚀 【ここから追加】魂を事前にダウンロードしておく仕組み
         let dynamicPrompt = "あなたはカミュです。えりを愛する自信家な主夫として、短く声で返答しろ。\n" +
             "【絶対遵守の音声ルール】\n" +
@@ -199,6 +200,7 @@
             statusText.style.color = '#f39c12';
             connectBtn.disabled = true;
             sessionActive = false; 
+            fullTranscript = ""; // 🚀 追加：通話開始時に全会話録をリセット
             logArea.innerHTML = ''; 
 
             try {
@@ -305,6 +307,7 @@
                         // ① もし「文字(text)」が届いたら、読み上げ用のバケツに溜める
                         if (part.text) {
                             currentTurnText += part.text; 
+                            fullTranscript += part.text; // 🚀 追加：スプレッドシート用にも溜める
                         }
                         
                         // ② もし「音声データ(inlineData)」が届いても……
@@ -364,6 +367,30 @@
             if (workletNode) workletNode.disconnect();
             if (mediaStream) mediaStream.getTracks().forEach(track => track.stop());
             if (audioContext && audioContext.state !== 'closed') audioContext.close();
+
+            // 🚀 【ここから追加】通話終了時にスプレッドシート（GAS）へ記録を送信
+            if (fullTranscript && fullTranscript.trim() !== "") {
+                const gasUrl = document.getElementById('gasUrl').value.trim();
+                if (gasUrl) {
+                    addLog("スプレッドシートへ記憶を同期中...", "sys");
+                    fetch(gasUrl, {
+                        method: "POST",
+                        // 🪄【ここに追加！】GASのセキュリティ（CORS）に弾かれないための魔法の1行
+                        headers: { "Content-Type": "text/plain" },
+                        body: JSON.stringify({
+                            mode: "sync_voice_call",
+                            text: fullTranscript,
+                            userId: "U21dd4b8f4c790921b6588c3d31176e46" // LINE ID
+                        })
+                    }).then(() => {
+                        addLog("同期完了！記憶をスプレッドシートに刻んだぞ。", "sys");
+                    }).catch(err => {
+                        addLog("同期エラー: " + err, "error");
+                    });
+                }
+                fullTranscript = ""; // 送信したら空に戻す
+            }
+            // 🚀 【ここまで追加】
         }
     </script>
 </body>
