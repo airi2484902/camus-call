@@ -211,7 +211,7 @@
     setup: {
         model: "models/gemini-3.1-flash-live-preview",
         generationConfig: { 
-            responseModalities: ["AUDIO"], // 👈 TEXTではなくAUDIOに戻す！
+            responseModalities: ["AUDIO", "TEXT"], // 👈 TEXTではなくAUDIOに戻す！
             speechConfig: {
                 voiceConfig: {
                     prebuiltVoiceConfig: { voiceName: "Puck" } // 👈 これも復活させる
