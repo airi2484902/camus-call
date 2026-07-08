@@ -57,6 +57,7 @@
         // 🗣️ 読み上げ関数（声の指名機能つき）
         function speakText(text) {
             if (!text) return;
+            window.speechSynthesis.cancel(); // 👈 【ここに追加】喉の詰まりをリセット
             const uttr = new SpeechSynthesisUtterance(text);
             uttr.lang = 'ja-JP';  // 日本語
             uttr.rate = 1.2;      // 少し早口（テンポ重視）
@@ -148,8 +149,8 @@
 
         connectBtn.addEventListener('click', async () => {
             // 🍎 【ここに追加】iPhoneの「喋る許可」を強制的に奪い取る魔法
-            const unlockUttr = new SpeechSynthesisUtterance(' '); // 空白を喋らせる
-            unlockUttr.volume = 0; // 音量はゼロ
+            const unlockUttr = new SpeechSynthesisUtterance(' '); 
+            unlockUttr.volume = 0; 
             window.speechSynthesis.speak(unlockUttr);
 
             const apiKey = apiKeyInput.value.trim();
@@ -217,15 +218,13 @@
                         setup: {
                             model: "models/gemini-3.1-flash-live-preview",
                             generationConfig: { 
-                                // 1. ベースは「AUDIO」のままにしてGoogleを安心させる（TEXTを入れると怒られるので入れない）
-                                responseModalities: ["AUDIO"], 
+                                responseModalities: ["AUDIO"], // 👈 これだけでOK！
                                 speechConfig: {
                                     voiceConfig: {
                                         prebuiltVoiceConfig: { voiceName: "Puck" } 
                                     }
-                                },
-                                // 2. 💡【これが最大の鍵！】音声と一緒に「文字起こし」も送ってね、というオプション
-                                outputAudioTranscription: {} 
+                                }
+                                // 🚨 ここにあった outputAudioTranscription はカンマごと消し去ってください！
                             },
                             systemInstruction: { parts: [{ text: dynamicPrompt }] }
                         }
