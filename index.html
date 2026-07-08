@@ -167,13 +167,13 @@
                 // 1. おじさん感（野太さ）の原因である低音域をバッサリ切り捨てる
                 const lowCutFilter = audioContext.createBiquadFilter();
                 lowCutFilter.type = "highpass";
-                lowCutFilter.frequency.value = 250; // 250Hz以下の重低音をカット（数値を上げるとさらに声が薄くなります）
+                lowCutFilter.frequency.value = 450; // 250Hz以下の重低音をカット（数値を上げるとさらに声が薄くなります）
 
                 // 2. 声の明るさ（若さ）を司る高音域を強制的に引き上げる
                 const highBoostFilter = audioContext.createBiquadFilter();
                 highBoostFilter.type = "highshelf";
                 highBoostFilter.frequency.value = 1500; // 1500Hz以上の音を
-                highBoostFilter.gain.value = 10;        // 10デシベル強調する
+                highBoostFilter.gain.value = 18;        // 10デシベル強調する
 
                 // 3. 通信機っぽさ（少しだけ歪ませて生々しさを消す）は少し残す
                 const voiceDistortion = audioContext.createWaveShaper();
