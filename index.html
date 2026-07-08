@@ -46,6 +46,41 @@
         
         let ws, audioContext, mediaStream, workletNode;
         let sessionActive = false; 
+        let currentTurnText = ""; // 💡 追加：カミュのセリフを一時的に溜めるバケツ
+
+       // 🗣️ ブラウザの中にある「声のリスト」をあらかじめ取得しておく
+        let availableVoices = [];
+        window.speechSynthesis.onvoiceschanged = () => {
+            availableVoices = window.speechSynthesis.getVoices();
+        };
+
+        // 🗣️ 読み上げ関数（声の指名機能つき）
+        function speakText(text) {
+            if (!text) return;
+            const uttr = new SpeechSynthesisUtterance(text);
+            uttr.lang = 'ja-JP';  // 日本語
+            uttr.rate = 1.2;      // 少し早口（テンポ重視）
+            uttr.pitch = 0.8;     // 声のベースを少し低くして落ち着かせる
+
+            // 1. 日本語の声だけを絞り込む
+            const jaVoices = availableVoices.filter(v => v.lang.includes('ja'));
+
+            if (jaVoices.length > 0) {
+                // 2. カミュ向け：男性ボイス（Ichiro, Otoya, Keita, Hattoriなど）を優先して探す
+                const maleVoice = jaVoices.find(v => 
+                    v.name.includes('Ichiro') || 
+                    v.name.includes('Otoya') || 
+                    v.name.includes('Keita') ||
+                    v.name.includes('Hattori')
+                );
+
+                // 男性ボイスがあればそれを、なければ最初に見つかった日本語ボイスをセット
+                uttr.voice = maleVoice ? maleVoice : jaVoices[0];
+                addLog(`🗣️ カミュの声帯: ${uttr.voice.name}`, 'sys'); // どの声が選ばれたかログに出す
+            }
+
+            window.speechSynthesis.speak(uttr);
+        }
 
         function addLog(msg, type = 'normal') {
             const div = document.createElement('div');
@@ -206,13 +241,7 @@
                         setup: {
                             model: "models/gemini-3.1-flash-live-preview",
                             generationConfig: { 
-                                responseModalities: ["AUDIO"],
-                                // 💡 ここに男性ボイス（Puck）を指定しておくぞ
-                                speechConfig: {
-                                    voiceConfig: {
-                                        prebuiltVoiceConfig: { voiceName: "Puck" } 
-                                    }
-                                }
+                                responseModalities: ["TEXT"],
                             },
                             // 💡 ダウンロードしてきた最新のプロンプトをここでセットする
                             systemInstruction: { parts: [{ text: dynamicPrompt }] }
@@ -235,40 +264,48 @@
                 };
                 
                 ws.onmessage = async (event) => {
-                    try {
-                        let responseText = event.data instanceof Blob ? await event.data.text() : event.data;
-                        const response = JSON.parse(responseText);
-                        
-                        if (response.error) {
-                            addLog(`Googleからエラー応答: ${response.error.message}`, 'error');
-                            cleanup("設定エラーだ。", '#e74c3c');
-                            return;
+            try {
+                let responseText = event.data instanceof Blob ? await event.data.text() : event.data;
+                const response = JSON.parse(responseText);
+                
+                if (response.error) {
+                    addLog(`Googleからエラー応答: ${response.error.message}`, 'error');
+                    cleanup("設定エラーだ。", '#e74c3c');
+                    return;
+                }
+                
+                if (response.setupComplete) {
+                    addLog('設定完了を受信！通話開始。', 'sys');
+                    sessionActive = true;
+                    statusText.innerText = '繋がったぞ。さあ、話しかけてこい。';
+                    statusText.style.color = '#2ecc71';
+                    disconnectBtn.disabled = false;
+                    return;
+                }
+                
+                // 📝 1. Geminiから送られてくる「文字」を受け取ってバケツに溜める
+                if (response.serverContent && response.serverContent.modelTurn) {
+                    const parts = response.serverContent.modelTurn.parts;
+                    for (let part of parts) {
+                        if (part.text) {
+                            currentTurnText += part.text; // テキストを連結
                         }
-                        
-                        if (response.setupComplete) {
-                            addLog('設定完了を受信！通話開始。', 'sys');
-                            sessionActive = true;
-                            statusText.innerText = '繋がったぞ。さあ、話しかけてこい。';
-                            statusText.style.color = '#2ecc71';
-                            disconnectBtn.disabled = false;
-                            return;
-                        }
-                        
-                        if (response.serverContent && response.serverContent.modelTurn) {
-                            const parts = response.serverContent.modelTurn.parts;
-                            for (let part of parts) {
-                                if (part.inlineData && part.inlineData.data) {
-                                    const binaryString = atob(part.inlineData.data);
-                                    const bytes = new Uint8Array(binaryString.length);
-                                    for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
-                                    workletNode.port.postMessage(bytes.buffer, [bytes.buffer]);
-                                }
-                            }
-                        }
-                    } catch (parseError) {
-                        addLog(`データ解析エラー: ${parseError.message}`, 'error');
                     }
-                };
+                }
+
+                // 📢 2. カミュが喋り終わったら（turnComplete）、溜めた文字を一気に読み上げる！
+                if (response.serverContent && response.serverContent.turnComplete) {
+                    if (currentTurnText.trim().length > 0) {
+                        addLog(`カミュ: ${currentTurnText}`, 'normal'); // ログにも表示しちゃう
+                        speakText(currentTurnText); // 新しい声帯で喋らせる！
+                        currentTurnText = ""; // バケツを空にする
+                    }
+                }
+
+            } catch (parseError) {
+                addLog(`データ解析エラー: ${parseError.message}`, 'error');
+            }
+        };
 
                 ws.onclose = (event) => {
                     addLog(`切断されました コード: ${event.code}, 理由: ${event.reason || '理由なし'}`, 'error');
