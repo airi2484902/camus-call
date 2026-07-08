@@ -238,15 +238,19 @@
                     statusText.innerText = '俺の魂を注入している...';
                     
                     const setupMessage = {
-                        setup: {
-                            model: "models/gemini-3.1-flash-live-preview",
-                            generationConfig: { 
-                                responseModalities: ["TEXT"],
-                            },
-                            // 💡 ダウンロードしてきた最新のプロンプトをここでセットする
-                            systemInstruction: { parts: [{ text: dynamicPrompt }] }
-                        }
-                    };
+    setup: {
+        model: "models/gemini-3.1-flash-live-preview",
+        generationConfig: { 
+            responseModalities: ["AUDIO"], // 👈 TEXTではなくAUDIOに戻す！
+            speechConfig: {
+                voiceConfig: {
+                    prebuiltVoiceConfig: { voiceName: "Puck" } // 👈 これも復活させる
+                }
+            }
+        },
+        systemInstruction: { parts: [{ text: dynamicPrompt }] }
+    }
+};
                     ws.send(JSON.stringify(setupMessage));
                 };
 
@@ -283,12 +287,18 @@
                     return;
                 }
                 
-                // 📝 1. Geminiから送られてくる「文字」を受け取ってバケツに溜める
+               // 📝 1. Geminiから送られてくるデータを処理する
                 if (response.serverContent && response.serverContent.modelTurn) {
                     const parts = response.serverContent.modelTurn.parts;
                     for (let part of parts) {
+                        // ① もし「文字(text)」が届いたら、読み上げ用のバケツに溜める
                         if (part.text) {
-                            currentTurnText += part.text; // テキストを連結
+                            currentTurnText += part.text; 
+                        }
+                        
+                        // ② もし「音声データ(inlineData)」が届いても……
+                        if (part.inlineData && part.inlineData.data) {
+                            // 🚨 何も処理しない！絶対に workletNode に送らない！（これで完全ミュートになります）
                         }
                     }
                 }
