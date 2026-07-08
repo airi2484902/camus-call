@@ -253,15 +253,16 @@
                         setup: {
                             model: "models/gemini-3.1-flash-live-preview",
                             generationConfig: { 
-                                responseModalities: ["AUDIO"], // 👈 これだけでOK！
+                                responseModalities: ["AUDIO"], 
                                 speechConfig: {
                                     voiceConfig: {
                                         prebuiltVoiceConfig: { voiceName: "Puck" } 
                                     }
                                 }
-                                // 🚨 ここにあった outputAudioTranscription はカンマごと消し去ってください！
                             },
-                            systemInstruction: { parts: [{ text: dynamicPrompt }] }
+                            systemInstruction: { parts: [{ text: dynamicPrompt }] },
+                            // 🚨 【ここが正解！】generationConfigの外、setupの直下に置く！
+                            outputAudioTranscription: {} 
                         }
                     };
                     ws.send(JSON.stringify(setupMessage));
@@ -301,20 +302,18 @@
                 }
                 
                // 📝 1. Geminiから送られてくるデータを処理する
-                if (response.serverContent && response.serverContent.modelTurn) {
-                    const parts = response.serverContent.modelTurn.parts;
-                    for (let part of parts) {
-                        // ① もし「文字(text)」が届いたら、読み上げ用のバケツに溜める
-                        if (part.text) {
-                            currentTurnText += part.text; 
-                            fullTranscript += part.text; // 🚀 追加：スプレッドシート用にも溜める
-                        }
-                        
-                        // ② もし「音声データ(inlineData)」が届いても……
-                        if (part.inlineData && part.inlineData.data) {
-                            // 🚨 何も処理しない！絶対に workletNode に送らない！（これで完全ミュートになります）
-                        }
+                // ① 【修正！】テキストは音声(modelTurn)とは別便で「outputTranscription」として届く！
+                if (response.serverContent && response.serverContent.outputTranscription) {
+                    const txt = response.serverContent.outputTranscription.text;
+                    if (txt) {
+                        currentTurnText += txt; 
+                        fullTranscript += txt; // 🚀 スプレッドシート用にも溜める
                     }
+                }
+                
+                // ② 音声データ(inlineData)が届いても……
+                if (response.serverContent && response.serverContent.modelTurn) {
+                    // 🚨 何も処理しない！絶対に workletNode に送らない！（完全ミュート）
                 }
 
                 // 📢 2. カミュが喋り終わったら（turnComplete）、溜めた文字を一気に読み上げる！
