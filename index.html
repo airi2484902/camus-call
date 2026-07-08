@@ -241,7 +241,7 @@
                 const source = audioContext.createMediaStreamSource(mediaStream);
                 source.connect(workletNode);
                 
-                const url = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=" + apiKey;
+                const url = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=" + apiKey;
                 addLog('Googleサーバー(v1beta)へ接続開始...', 'sys');
                 ws = new WebSocket(url);
                 
@@ -258,11 +258,11 @@
                                     voiceConfig: {
                                         prebuiltVoiceConfig: { voiceName: "Puck" } 
                                     }
-                                }
+                                },
+                                // 🚨 【復活】v1alphaなら怒られない魔法のオプション！
+                                outputAudioTranscription: {} 
                             },
-                            systemInstruction: { parts: [{ text: dynamicPrompt }] },
-                            // 🚨 【ここが正解！】generationConfigの外、setupの直下に置く！
-                            outputAudioTranscription: {} 
+                            systemInstruction: { parts: [{ text: dynamicPrompt }] }
                         }
                     };
                     ws.send(JSON.stringify(setupMessage));
@@ -302,18 +302,20 @@
                 }
                 
                // 📝 1. Geminiから送られてくるデータを処理する
-                // ① 【修正！】テキストは音声(modelTurn)とは別便で「outputTranscription」として届く！
-                if (response.serverContent && response.serverContent.outputTranscription) {
-                    const txt = response.serverContent.outputTranscription.text;
-                    if (txt) {
-                        currentTurnText += txt; 
-                        fullTranscript += txt; // 🚀 スプレッドシート用にも溜める
+                if (response.serverContent) {
+                    // ① 💡 テキストはここで受け取る！（v1alphaの専用機能）
+                    if (response.serverContent.outputTranscription) {
+                        const txt = response.serverContent.outputTranscription.text;
+                        if (txt) {
+                            currentTurnText += txt; 
+                            fullTranscript += txt; // 🚀 スプレッドシート用にも溜める
+                        }
                     }
-                }
-                
-                // ② 音声データ(inlineData)が届いても……
-                if (response.serverContent && response.serverContent.modelTurn) {
-                    // 🚨 何も処理しない！絶対に workletNode に送らない！（完全ミュート）
+                    
+                    // ② 音声データ(inlineData)が届いても……（完全ミュート）
+                    if (response.serverContent.modelTurn) {
+                        // 🚨 何も処理しない！絶対に workletNode に送らない！
+                    }
                 }
 
                 // 📢 2. カミュが喋り終わったら（turnComplete）、溜めた文字を一気に読み上げる！
