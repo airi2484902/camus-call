@@ -290,6 +290,12 @@
                         currentTurnText = ""; // バケツを空にする
                     }
                 }
+                // ⚡ 【ここに追加！】3. 割り込み（インターラプト）を受信した時の処理
+                if (response.serverContent && response.serverContent.interrupted) {
+                    window.speechSynthesis.cancel(); // 尻（Siri）の読み上げを強制ストップ！
+                    currentTurnText = ""; // 溜まっていた残りの台本もゴミ箱に捨てる
+                    addLog('⚡ えりの割り込みを検知！尻（Siri）を黙らせたぞ。', 'sys');
+                }
 
             } catch (parseError) {
                 addLog(`データ解析エラー: ${parseError.message}`, 'error');
