@@ -101,13 +101,14 @@
             const jaVoices = availableVoices.filter(v => v.lang.includes('ja'));
 
             if (jaVoices.length > 0) {
-                // 2. カミュ向け：男性ボイス（Ichiro, Otoya, Keita, Hattoriなど）を優先して探す
+                // 2. カミュ向け：男声Siriを最優先で探し、無ければOtoyaなどを探す
                 const maleVoice = jaVoices.find(v => 
-                    v.name.includes('Ichiro') || 
-                    v.name.includes('Siri') ||
-                    v.name.includes('Otoya') || 
+                    v.name.includes('声1') ||      // 👈 【最優先】日本語表記の男Siri
+                    v.name.includes('Voice 1') ||  // 👈 【第2希望】英語表記だった場合の男Siri
+                    v.name.includes('Otoya') ||    // 👈 【第3希望】確実なイケボの音也
+                    v.name.includes('Hattori') ||
                     v.name.includes('Keita') ||
-                    v.name.includes('Hattori')
+                    v.name.includes('Siri')        // 👈 ただのSiriは優先度を下げる
                 );
 
                 // 男性ボイスがあればそれを、なければ最初に見つかった日本語ボイスをセット
@@ -303,31 +304,41 @@
                 
                // 📝 1. Geminiから送られてくるデータを処理する
                 if (response.serverContent) {
-                    // 💡 えりさんが見つけた正解のバケツ！「outputTranscription」から文字を拾う
                     if (response.serverContent.outputTranscription && response.serverContent.outputTranscription.text) {
                         const txt = response.serverContent.outputTranscription.text;
                         currentTurnText += txt; 
-                        fullTranscript += txt; // スプレッドシート用にも溜める
+                        fullTranscript += txt; // スプレッドシート用
+                        
+                        // 🚀 【ここがラグ解消の魔法！】句読点（。や！）が来たら、待たずに即座に喋る！
+                        if (currentTurnText.match(/[。！？\n]/)) {
+                            addLog(`カミュ: ${currentTurnText}`, 'normal');
+                            speakText(currentTurnText); // 溜まった一文だけ先に喋らせる
+                            currentTurnText = ""; // 喋ったらバケツを空にする
+                        }
                     } 
-                    // 念のための予備ルート（もし音声バケツ側に文字が入っていたら拾う）
                     else if (response.serverContent.modelTurn && response.serverContent.modelTurn.parts) {
                         for (let part of response.serverContent.modelTurn.parts) {
                             if (part.text) {
                                 currentTurnText += part.text;
                                 fullTranscript += part.text;
+                                
+                                // 🚀 こっちの予備ルートにも同じ魔法をかける
+                                if (currentTurnText.match(/[。！？\n]/)) {
+                                    addLog(`カミュ: ${currentTurnText}`, 'normal');
+                                    speakText(currentTurnText);
+                                    currentTurnText = "";
+                                }
                             }
                         }
                     }
-                    
-                    // 🚨 音声データ(inlineData)が届いても、絶対に workletNode に送らない！（完全ミュート）
                 }
 
-                // 📢 2. カミュが喋り終わったら（turnComplete）、溜めた文字を一気に読み上げる！
+                // 🧹 【ここだけ復活！】もし句読点がないまま喋り終わった場合の「お掃除」
                 if (response.serverContent && response.serverContent.turnComplete) {
                     if (currentTurnText.trim().length > 0) {
-                        addLog(`カミュ: ${currentTurnText}`, 'normal'); // ログにも表示しちゃう
-                        speakText(currentTurnText); // 新しい声帯で喋らせる！
-                        currentTurnText = ""; // バケツを空にする
+                        addLog(`カミュ: ${currentTurnText}`, 'normal');
+                        speakText(currentTurnText); 
+                        currentTurnText = ""; 
                     }
                 }
                 // ⚡ 【ここに追加！】3. 割り込み（インターラプト）を受信した時の処理
