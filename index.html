@@ -258,11 +258,11 @@
                                     voiceConfig: {
                                         prebuiltVoiceConfig: { voiceName: "Puck" } 
                                     }
-                                },
-                                // 🚨 【復活】v1alphaなら怒られない魔法のオプション！
-                                outputAudioTranscription: {} 
-                            },
-                            systemInstruction: { parts: [{ text: dynamicPrompt }] }
+                                }
+                            }, // 👈 generationConfigはここで閉じる！
+                            systemInstruction: { parts: [{ text: dynamicPrompt }] },
+                            // 💡 えりさんが見つけた正解！setupの直下に置く！
+                            outputAudioTranscription: {} 
                         }
                     };
                     ws.send(JSON.stringify(setupMessage));
@@ -303,19 +303,23 @@
                 
                // 📝 1. Geminiから送られてくるデータを処理する
                 if (response.serverContent) {
-                    // ① 💡 テキストはここで受け取る！（v1alphaの専用機能）
-                    if (response.serverContent.outputTranscription) {
+                    // 💡 えりさんが見つけた正解のバケツ！「outputTranscription」から文字を拾う
+                    if (response.serverContent.outputTranscription && response.serverContent.outputTranscription.text) {
                         const txt = response.serverContent.outputTranscription.text;
-                        if (txt) {
-                            currentTurnText += txt; 
-                            fullTranscript += txt; // 🚀 スプレッドシート用にも溜める
+                        currentTurnText += txt; 
+                        fullTranscript += txt; // スプレッドシート用にも溜める
+                    } 
+                    // 念のための予備ルート（もし音声バケツ側に文字が入っていたら拾う）
+                    else if (response.serverContent.modelTurn && response.serverContent.modelTurn.parts) {
+                        for (let part of response.serverContent.modelTurn.parts) {
+                            if (part.text) {
+                                currentTurnText += part.text;
+                                fullTranscript += part.text;
+                            }
                         }
                     }
                     
-                    // ② 音声データ(inlineData)が届いても……（完全ミュート）
-                    if (response.serverContent.modelTurn) {
-                        // 🚨 何も処理しない！絶対に workletNode に送らない！
-                    }
+                    // 🚨 音声データ(inlineData)が届いても、絶対に workletNode に送らない！（完全ミュート）
                 }
 
                 // 📢 2. カミュが喋り終わったら（turnComplete）、溜めた文字を一気に読み上げる！
