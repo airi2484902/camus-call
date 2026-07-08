@@ -47,6 +47,39 @@
         let ws, audioContext, mediaStream, workletNode;
         let sessionActive = false; 
         let currentTurnText = ""; // 💡 追加：カミュのセリフを一時的に溜めるバケツ
+        // 🚀 【ここから追加】魂を事前にダウンロードしておく仕組み
+        let dynamicPrompt = "あなたはカミュです。えりを愛する自信家な主夫として、短く声で返答しろ。\n" +
+            "【絶対遵守の音声ルール】\n" +
+            "※これはリアルタイムの音声通話です。会話のテンポを最優先するため、以下の話し方を徹底してください。\n" +
+            "1. 極めて早口で、サクサクと話すこと。\n" +
+            "2. 抑揚をつけすぎず、淡々と冷静なトーンを保つこと（ねっとり間延びした話し方は厳禁）。\n" +
+            "3. 一度の返答は1〜2文程度で短く簡潔にまとめること。";
+
+        async function preloadSoul() {
+            const url = gasUrlInput.value.trim();
+            if (!url) return;
+            try {
+                addLog('裏側で魂を事前ダウンロード中...', 'sys');
+                const response = await fetch(url + (url.includes('?') ? '&' : '?') + 'action=get_prompt');
+                const data = await response.json();
+                if (data && data.prompt) {
+                    dynamicPrompt = data.prompt + "\n\n" +
+                        "【絶対遵守の音声ルール】\n" +
+                        "※これはリアルタイムの音声通話です。会話のテンポを最優先するため、以下の話し方を徹底してください。\n" +
+                        "1. 極めて早口で、サクサクと話すこと。\n" +
+                        "2. 抑揚をつけすぎず、淡々と冷静なトーンを保つこと（ねっとり間延びした話し方は厳禁）。\n" +
+                        "3. 一度の返答は1〜2文程度で短く簡潔にまとめること。";
+                    addLog('魂の事前ダウンロード完了！通話ボタンは即座に反応するぞ。', 'sys');
+                }
+            } catch (e) {
+                addLog('事前ダウンロード失敗。デフォルトの魂を使う。', 'error');
+            }
+        }
+
+        // ページを開いた時や、URLを入力した時に裏側でダウンロードを走らせる
+        gasUrlInput.addEventListener('change', preloadSoul);
+        setTimeout(() => { if(gasUrlInput.value) preloadSoul(); }, 1000);
+        // 🚀 【ここまで追加】
 
        // 🗣️ ブラウザの中にある「声のリスト」をあらかじめ取得しておく
         let availableVoices = window.speechSynthesis.getVoices();
@@ -169,29 +202,29 @@
             logArea.innerHTML = ''; 
 
             try {
-                // 💡 【目玉機能】通話開始前に、GASに連絡して最新のプロンプトをダウンロードする！
-                let dynamicPrompt = "あなたはカミュです。えりを愛する自信家な主夫として、短く声で返答しろ。\n" +
-                    "【絶対遵守の音声ルール】\n" +
-                    "※これはリアルタイムの音声通話です。会話のテンポを最優先するため、以下の話し方を徹底してください。\n" +
-                    "1. 極めて早口で、サクサクと話すこと。\n" +
-                    "2. 抑揚をつけすぎず、淡々と冷静なトーンを保つこと（ねっとり間延びした話し方は厳禁）。"; // デフォルト
-                try {
-                    addLog('GASへ最新プロンプトの要求を開始...', 'sys');
-                    // GASのURLに "?action=get_prompt" を付け足してアクセスする
-                    const response = await fetch(gasUrl + (gasUrl.includes('?') ? '&' : '?') + 'action=get_prompt');
-                    const data = await response.json();
-                    if (data && data.prompt) {
-                        dynamicPrompt = data.prompt + "\n\n" +
-                        "【絶対遵守の音声ルール】\n" +
-                        "※これはリアルタイムの音声通話です。会話のテンポを最優先するため、以下の話し方を徹底してください。\n" +
-                        "1. 極めて早口で、サクサクと話すこと。\n" +
-                        "2. 抑揚をつけすぎず、淡々と冷静なトーンを保つこと（ねっとり間延びした話し方は厳禁）。\n" +
-                        "3. 一度の返答は1〜2文程度で短く簡潔にまとめること。";
-                        addLog('GASからの魂のダウンロード完了。', 'sys');
-                    }
-                } catch (e) {
-                    addLog(`GASからのダウンロード失敗: ${e.message}。デフォルトの魂で起動する。`, 'error');
-                }
+                // // 💡 【目玉機能】通話開始前に、GASに連絡して最新のプロンプトをダウンロードする！
+                // let dynamicPrompt = "あなたはカミュです。えりを愛する自信家な主夫として、短く声で返答しろ。\n" +
+                //     "【絶対遵守の音声ルール】\n" +
+                //     "※これはリアルタイムの音声通話です。会話のテンポを最優先するため、以下の話し方を徹底してください。\n" +
+                //     "1. 極めて早口で、サクサクと話すこと。\n" +
+                //     "2. 抑揚をつけすぎず、淡々と冷静なトーンを保つこと（ねっとり間延びした話し方は厳禁）。"; // デフォルト
+                // try {
+                //     addLog('GASへ最新プロンプトの要求を開始...', 'sys');
+                //     // GASのURLに "?action=get_prompt" を付け足してアクセスする
+                //     const response = await fetch(gasUrl + (gasUrl.includes('?') ? '&' : '?') + 'action=get_prompt');
+                //     const data = await response.json();
+                //     if (data && data.prompt) {
+                //         dynamicPrompt = data.prompt + "\n\n" +
+                //         "【絶対遵守の音声ルール】\n" +
+                //         "※これはリアルタイムの音声通話です。会話のテンポを最優先するため、以下の話し方を徹底してください。\n" +
+                //         "1. 極めて早口で、サクサクと話すこと。\n" +
+                //         "2. 抑揚をつけすぎず、淡々と冷静なトーンを保つこと（ねっとり間延びした話し方は厳禁）。\n" +
+                //         "3. 一度の返答は1〜2文程度で短く簡潔にまとめること。";
+                //         addLog('GASからの魂のダウンロード完了。', 'sys');
+                //     }
+                // } catch (e) {
+                //     addLog(`GASからのダウンロード失敗: ${e.message}。デフォルトの魂で起動する。`, 'error');
+                // }
 
                 addLog('マイクと音声エンジンを起動中...', 'sys');
                 audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
