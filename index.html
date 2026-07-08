@@ -49,7 +49,7 @@
         let currentTurnText = ""; // 💡 追加：カミュのセリフを一時的に溜めるバケツ
 
        // 🗣️ ブラウザの中にある「声のリスト」をあらかじめ取得しておく
-        let availableVoices = [];
+        let availableVoices = window.speechSynthesis.getVoices();
         window.speechSynthesis.onvoiceschanged = () => {
             availableVoices = window.speechSynthesis.getVoices();
         };
