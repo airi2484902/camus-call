@@ -163,14 +163,19 @@
                 
                 const source = audioContext.createMediaStreamSource(mediaStream);
                 source.connect(workletNode);
-                // 📻 【ここから】不審者ボイス破壊エフェクト
-                // 1. 余計な低音と高音をカットして、ラジオ・通信機っぽい音にするフィルター
-                const communicationFilter = audioContext.createBiquadFilter();
-                communicationFilter.type = "bandpass";
-                communicationFilter.frequency.value = 1300; // 音の芯が集まる周波数（ここをいじると質感が変わります）
-                communicationFilter.Q.value = 1.5;          // フィルターのキツさ
+                // 📻 【ここから】野太さ強制カット＆高音ブーストEQ
+                // 1. おじさん感（野太さ）の原因である低音域をバッサリ切り捨てる
+                const lowCutFilter = audioContext.createBiquadFilter();
+                lowCutFilter.type = "highpass";
+                lowCutFilter.frequency.value = 250; // 250Hz以下の重低音をカット（数値を上げるとさらに声が薄くなります）
 
-                // 2. 音声をあえて少し歪ませて、生々しい人間の息遣いをメカニカルに潰すノード
+                // 2. 声の明るさ（若さ）を司る高音域を強制的に引き上げる
+                const highBoostFilter = audioContext.createBiquadFilter();
+                highBoostFilter.type = "highshelf";
+                highBoostFilter.frequency.value = 1500; // 1500Hz以上の音を
+                highBoostFilter.gain.value = 10;        // 10デシベル強調する
+
+                // 3. 通信機っぽさ（少しだけ歪ませて生々しさを消す）は少し残す
                 const voiceDistortion = audioContext.createWaveShaper();
                 const makeDistortionCurve = (amount) => {
                     const curve = new Float32Array(44100);
@@ -180,15 +185,15 @@
                     }
                     return curve;
                 };
-                voiceDistortion.curve = makeDistortionCurve(25); // 歪みの強さ（数字を大きくするとよりメカっぽくなります）
+                voiceDistortion.curve = makeDistortionCurve(2); // ガビガビにならない程度(2)の極薄の歪み
                 voiceDistortion.oversample = '4x';
 
-                // 3. 最後にカミュの声をエフェクトに繋ぎ、スピーカーへ出力する
-                workletNode.connect(voiceDistortion);
-                voiceDistortion.connect(communicationFilter);
-                communicationFilter.connect(audioContext.destination);
+                // 4. エフェクトを順番に繋ぐ
+                workletNode.connect(lowCutFilter);
+                lowCutFilter.connect(highBoostFilter);
+                highBoostFilter.connect(voiceDistortion);
+                voiceDistortion.connect(audioContext.destination);
                 // 📻 【ここまで】
-
                 const url = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=" + apiKey;
                 addLog('Googleサーバー(v1beta)へ接続開始...', 'sys');
                 ws = new WebSocket(url);
@@ -205,7 +210,7 @@
                                 // 💡 ここに男性ボイス（Puck）を指定しておくぞ
                                 speechConfig: {
                                     voiceConfig: {
-                                        prebuiltVoiceConfig: { voiceName: "Charon" } 
+                                        prebuiltVoiceConfig: { voiceName: "Puck" } 
                                     }
                                 }
                             },
