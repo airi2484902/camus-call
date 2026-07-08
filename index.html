@@ -208,19 +208,22 @@
                     statusText.innerText = '俺の魂を注入している...';
                     
                     const setupMessage = {
-    setup: {
-        model: "models/gemini-3.1-flash-live-preview",
-        generationConfig: { 
-            responseModalities: ["AUDIO", "TEXT"], // 👈 TEXTではなくAUDIOに戻す！
-            speechConfig: {
-                voiceConfig: {
-                    prebuiltVoiceConfig: { voiceName: "Puck" } // 👈 これも復活させる
-                }
-            }
-        },
-        systemInstruction: { parts: [{ text: dynamicPrompt }] }
-    }
-};
+                        setup: {
+                            model: "models/gemini-3.1-flash-live-preview",
+                            generationConfig: { 
+                                // 1. ベースは「AUDIO」のままにしてGoogleを安心させる（TEXTを入れると怒られるので入れない）
+                                responseModalities: ["AUDIO"], 
+                                speechConfig: {
+                                    voiceConfig: {
+                                        prebuiltVoiceConfig: { voiceName: "Puck" } 
+                                    }
+                                },
+                                // 2. 💡【これが最大の鍵！】音声と一緒に「文字起こし」も送ってね、というオプション
+                                outputAudioTranscription: {} 
+                            },
+                            systemInstruction: { parts: [{ text: dynamicPrompt }] }
+                        }
+                    };
                     ws.send(JSON.stringify(setupMessage));
                 };
 
