@@ -76,6 +76,7 @@
         let currentAudio = null;
 
         // 🗣️ 完全防備版：GASを経由してGoogleのイケボを呼び出す関数
+        // 🗣️ 完全防備版：GASを経由してGoogleのイケボを呼び出す関数
         async function speakText(text) {
             if (!text) return;
             
@@ -85,13 +86,14 @@
 
             addLog('裏側の安全なサーバーでカミュの声を錬成中...', 'sys');
 
-            // 🔗 【重要】さっきGASでデプロイした「ウェブアプリのURL」をここに貼る！
+            // ⚠️【超重要】ここは「スプレッドシート用のGAS」ではなく、「新しく作った読み上げ用のGAS」のURLですか！？
             const gasTtsUrl = 'https://script.google.com/macros/s/AKfycbyhY5JSDbvDVpFYGZQieFLRD3ZwCX2k5tl0lNDcgmppfnx8ocLFMCU3J9YzKDAY17aGqw/exec';
 
             try {
-                // パスワードの代わりにGASへ「この文字を読んで」とだけ送る
+                // 🪄 【修正】スプレッドシートの時と同じ「CORS回避の魔法」を追加！
                 const response = await fetch(gasTtsUrl, {
                     method: 'POST',
+                    headers: { "Content-Type": "text/plain" }, // 👈 これが絶対に必要！
                     body: JSON.stringify({ text: cleanText })
                 });
                 
@@ -100,15 +102,14 @@
                 if (data.audioContent) {
                     if (currentAudio) currentAudio.pause();
                     
-                    // 🎵 GAS経由で届いた生の音声データを再生する
                     currentAudio = new Audio('data:audio/mp3;base64,' + data.audioContent);
                     currentAudio.play();
                     
                     addLog(`🗣️ カミュの声帯: Google Cloud TTS (重低音・安全設計)`, 'sys');
-                    } else {
-                          // 💡 失敗した理由（Googleからの生の返答）をそのままログに晒し上げる！
-                              addLog('Google激おこ理由: ' + JSON.stringify(data), 'error');
-                    }
+                } else {
+                    // 💡 失敗した理由（Googleからの生の返答）をそのままログに晒し上げる！
+                    addLog('Google激おこ理由: ' + JSON.stringify(data), 'error');
+                }
             } catch (e) {
                 addLog(`外部通信エラー: ${e.message}`, 'error');
             }
@@ -335,15 +336,14 @@
                         currentTurnText = ""; 
                     }
                 }
-                // ⚡ 【ここに追加！】3. 割り込み（インターラプト）を受信した時の処理
+                // ⚡ 3. 割り込み（インターラプト）を受信した時の処理
                 if (response.serverContent && response.serverContent.interrupted) {
 
-                    // 🚀 【ここを追加】VOICEVOXの音声を強制ストップ！
+                    // 🚀 外部音声（Google TTS）を強制ストップ！
                     if (currentAudio) currentAudio.pause();
                     
-                    window.speechSynthesis.cancel(); // 尻（Siri）の読み上げを強制ストップ！
                     currentTurnText = ""; // 溜まっていた残りの台本もゴミ箱に捨てる
-                    addLog('⚡ えりの割り込みを検知！尻（Siri）を黙らせたぞ。', 'sys');
+                    addLog('⚡ えりの割り込みを検知！カミュを黙らせたぞ。', 'sys');
                 }
 
             } catch (parseError) {
