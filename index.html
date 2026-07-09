@@ -313,55 +313,39 @@
                     return;
                 }
                 
-               // 📝 1. Geminiから送られてくるデータを処理する
+               // 📝 1. Geminiから送られてくるデータを処理する（ここでは文字を溜めるだけ！）
                 if (response.serverContent) {
                     if (response.serverContent.outputTranscription && response.serverContent.outputTranscription.text) {
                         const txt = response.serverContent.outputTranscription.text;
                         currentTurnText += txt; 
                         fullTranscript += txt; // スプレッドシート用
-                        
-                        // 🚀 【ここがラグ解消の魔法！】句読点（。や！）が来たら、待たずに即座に喋る！
-                        if (currentTurnText.match(/[。！？\n]/)) {
-                            addLog(`カミュ: ${currentTurnText}`, 'normal');
-                            speakText(currentTurnText); // 溜まった一文だけ先に喋らせる
-                            currentTurnText = ""; // 喋ったらバケツを空にする
-                        }
                     } 
                     else if (response.serverContent.modelTurn && response.serverContent.modelTurn.parts) {
                         for (let part of response.serverContent.modelTurn.parts) {
                             if (part.text) {
                                 currentTurnText += part.text;
                                 fullTranscript += part.text;
-                                
-                                // 🚀 こっちの予備ルートにも同じ魔法をかける
-                                if (currentTurnText.match(/[。！？\n]/)) {
-                                    addLog(`カミュ: ${currentTurnText}`, 'normal');
-                                    speakText(currentTurnText);
-                                    currentTurnText = "";
-                                }
                             }
                         }
                     }
                 }
 
-                // 🧹 【ここだけ復活！】もし句読点がないまま喋り終わった場合の「お掃除」
+                // 🎯 【大革命】Geminiが「全部考え終わった（turnComplete）」と合図を出した時だけ、一気に声帯に送る！
                 if (response.serverContent && response.serverContent.turnComplete) {
                     if (currentTurnText.trim().length > 0) {
                         addLog(`カミュ: ${currentTurnText}`, 'normal');
-                        speakText(currentTurnText); 
-                        currentTurnText = ""; 
+                        speakText(currentTurnText); // まとめて1回だけGoogleに送る
+                        currentTurnText = ""; // 喋らせたらバケツを空にする
                     }
                 }
+
                 // ⚡ 3. 割り込み（インターラプト）を受信した時の処理
                 if (response.serverContent && response.serverContent.interrupted) {
-
-                    // 🚀 音声を強制ストップし、順番待ちリュックも空っぽにする！
                     audioQueue = []; // リュックを空にする
                     isPlaying = false; // 信号機をリセット
                     if (currentAudio) {
                         try { currentAudio.stop(); } catch(e){}
                     }
-                    
                     currentTurnText = ""; // 溜まっていた残りの台本もゴミ箱に捨てる
                     addLog('⚡ えりの割り込みを検知！カミュを黙らせたぞ。', 'sys');
                 }
