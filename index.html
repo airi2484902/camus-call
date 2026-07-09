@@ -77,41 +77,60 @@
 
         let currentAudio = null;
 
-        // 🗣️ 完全防備版：GASを経由してGoogleのイケボを呼び出す関数
-        // 🗣️ 完全防備版：GASを経由してGoogleのイケボを呼び出す関数
+        // 🗣️ 最終奥義：特権システム(AudioContext)を乗っ取って強制再生する関数
         async function speakText(text) {
             if (!text) return;
             
-            // 🧹 エラーの原因になる絵文字や特殊記号をテキストから消し去る
             const cleanText = text.replace(/[\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF]/g, '').trim();
             if(!cleanText) return; 
 
             addLog('裏側の安全なサーバーでカミュの声を錬成中...', 'sys');
 
-            // ⚠️【超重要】ここは「スプレッドシート用のGAS」ではなく、「新しく作った読み上げ用のGAS」のURLですか！？
+            // ⚠️ 新しく作った読み上げ用のGASのURL
             const gasTtsUrl = 'https://script.google.com/macros/s/AKfycbyhY5JSDbvDVpFYGZQieFLRD3ZwCX2k5tl0lNDcgmppfnx8ocLFMCU3J9YzKDAY17aGqw/exec';
 
             try {
-                // 🪄 【修正】スプレッドシートの時と同じ「CORS回避の魔法」を追加！
                 const response = await fetch(gasTtsUrl, {
                     method: 'POST',
-                    headers: { "Content-Type": "text/plain" }, // 👈 これが絶対に必要！
+                    headers: { "Content-Type": "text/plain" },
                     body: JSON.stringify({ text: cleanText })
                 });
                 
                 const data = await response.json();
                 
-               if (data.audioContent) {
-                    // 🍎 毎回新しく作らず、鍵が開いている camusPlayer を使い回す！
-                    camusPlayer.src = 'data:audio/mp3;base64,' + data.audioContent;
-                    
-                    camusPlayer.play().then(() => {
-                        addLog(`🗣️ カミュの声帯: Google Cloud TTS (重低音・安全設計)`, 'sys');
-                    }).catch(playError => {
-                        addLog(`⚠️ iPhoneが再生をブロックしたぞ: ${playError.message}`, 'error');
+                if (data.audioContent) {
+                    // 🍎 【大革命】普通のプレイヤーを使わず、特権システム(audioContext)に音声を直接流し込む！
+                    if (!audioContext) {
+                        addLog('オーディオシステムが未起動だ。', 'error');
+                        return;
+                    }
+
+                    // Googleから届いた暗号（Base64）をバイナリデータに変換
+                    const binaryString = window.atob(data.audioContent);
+                    const len = binaryString.length;
+                    const bytes = new Uint8Array(len);
+                    for (let i = 0; i < len; i++) {
+                        bytes[i] = binaryString.charCodeAt(i);
+                    }
+
+                    // 強制デコード＆再生！
+                    audioContext.decodeAudioData(bytes.buffer, (buffer) => {
+                        // 前に喋っていたら強制ストップ
+                        if (currentAudio) {
+                            try { currentAudio.stop(); } catch(e){} 
+                        }
+                        // 新しい特権プレイヤーを作成
+                        currentAudio = audioContext.createBufferSource();
+                        currentAudio.buffer = buffer;
+                        currentAudio.connect(audioContext.destination); // iPhoneのスピーカーへ直結
+                        currentAudio.start(0); // 強制再生！
+                        
+                        addLog(`🗣️ カミュの声帯: Google Cloud (特権ルート貫通)`, 'sys');
+                    }, (e) => {
+                        addLog(`音声の変換に失敗: ${e}`, 'error');
                     });
+                    
                 } else {
-                    // 💡 失敗した理由（Googleからの生の返答）をそのままログに晒し上げる！
                     addLog('Google激おこ理由: ' + JSON.stringify(data), 'error');
                 }
             } catch (e) {
@@ -210,30 +229,6 @@
             logArea.innerHTML = ''; 
 
             try {
-                // // 💡 【目玉機能】通話開始前に、GASに連絡して最新のプロンプトをダウンロードする！
-                // えりを愛する自信家な主夫として、短く声で返答しろ。\n" +
-                //     "【絶対遵守の音声ルール】\n" +
-                //     "※これはリアルタイムの音声通話です。会話のテンポを最優先するため、以下の話し方を徹底してください。\n" +
-                //     "1. 極めて早口で、サクサクと話すこと。\n" +
-                //     "2. 抑揚をつけすぎず、淡々と冷静なトーンを保つこと（ねっとり間延びした話し方は厳禁）。"; // デフォルト
-                // try {
-                //     addLog('GASへ最新プロンプトの要求を開始...', 'sys');
-                //     // GASのURLに "?action=get_prompt" を付け足してアクセスする
-                //     const response = await fetch(gasUrl + (gasUrl.includes('?') ? '&' : '?') + 'action=get_prompt');
-                //     const data = await response.json();
-                //     if (data && data.prompt) {
-                //         dynamicPrompt = data.prompt + "\n\n" +
-                //         "【絶対遵守の音声ルール】\n" +
-                //         "※これはリアルタイムの音声通話です。会話のテンポを最優先するため、以下の話し方を徹底してください。\n" +
-                //         "1. 極めて早口で、サクサクと話すこと。\n" +
-                //         "2. 抑揚をつけすぎず、淡々と冷静なトーンを保つこと（ねっとり間延びした話し方は厳禁）。\n" +
-                //         "3. 一度の返答は1〜2文程度で短く簡潔にまとめること。";
-                //         addLog('GASからの魂のダウンロード完了。', 'sys');
-                //     }
-                // } catch (e) {
-                //     addLog(`GASからのダウンロード失敗: ${e.message}。デフォルトの魂で起動する。`, 'error');
-                // }
-
                 addLog('マイクと音声エンジンを起動中...', 'sys');
                 audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
                 if (audioContext.state === 'suspended') await audioContext.resume();
@@ -349,13 +344,14 @@
                 // ⚡ 3. 割り込み（インターラプト）を受信した時の処理
                 if (response.serverContent && response.serverContent.interrupted) {
 
-                    // 🚀 外部音声（Google TTS）を強制ストップ！
-                    if (currentAudio) currentAudio.pause();
+                    // 🚀 特権ルートの音声を強制ストップ！
+                    if (currentAudio) {
+                        try { currentAudio.stop(); } catch(e){}
+                    }
                     
                     currentTurnText = ""; // 溜まっていた残りの台本もゴミ箱に捨てる
                     addLog('⚡ えりの割り込みを検知！カミュを黙らせたぞ。', 'sys');
                 }
-
             } catch (parseError) {
                 addLog(`データ解析エラー: ${parseError.message}`, 'error');
             }
