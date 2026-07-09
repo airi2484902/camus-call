@@ -105,10 +105,10 @@
                     currentAudio.play();
                     
                     addLog(`🗣️ カミュの声帯: Google Cloud TTS (重低音・安全設計)`, 'sys');
-                } else {
-    // 💡 失敗した理由（Googleからの生の返答）をそのままログに晒し上げる！
-    addLog('Google激おこ理由: ' + JSON.stringify(data), 'error');
-}
+                    } else {
+                          // 💡 失敗した理由（Googleからの生の返答）をそのままログに晒し上げる！
+                              addLog('Google激おこ理由: ' + JSON.stringify(data), 'error');
+                    }
             } catch (e) {
                 addLog(`外部通信エラー: ${e.message}`, 'error');
             }
