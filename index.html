@@ -75,6 +75,13 @@
         let availableVoices = window.speechSynthesis.getVoices();
         window.speechSynthesis.onvoiceschanged = () => {
             availableVoices = window.speechSynthesis.getVoices();
+
+            // 🔍 【ここに追加】Safariが認識している日本語の声をすべてログに晒し上げる！
+            const jaList = availableVoices.filter(v => v.lang.includes('ja')).map(v => v.name).join(', ');
+            if (jaList && !logArea.innerHTML.includes('認識できた日本語の声')) {
+                addLog(`🔍 認識できた日本語の声: ${jaList}`, 'sys');
+            }
+            
         };
 
         // 🗣️ 読み上げ関数
