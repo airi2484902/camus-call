@@ -48,11 +48,8 @@
         let sessionActive = false; 
         let currentTurnText = ""; // 💡 追加：カミュのセリフを一時的に溜めるバケツ
         let fullTranscript = ""; // 🚀 追加：通話全体のセリフを記録するバケツ
-        // 🚀 【最適化版】余計な音声ルールを消して、キャラとテンポに特化！
-        let dynamicPrompt = "あなたはカミュです。えりを愛する自信家な主夫だ。\n" +
-            "【絶対遵守のルール】\n" +
-            "1. 一度の返答は1〜2文程度で短く簡潔にまとめること。（会話のテンポ重視）\n" +
-            "2. どんな状況でも一人称は必ず「俺」を使うこと。「私」や「僕」は絶対に禁止。";
+        // 🚀 【修正1】デフォルトの魂も余計な指示をなくす
+        let dynamicPrompt = "あなたはカミュです。えりを愛する自信家な主夫だ。一人称は必ず「俺」を使え。";
 
         async function preloadSoul() {
             const url = gasUrlInput.value.trim();
@@ -62,11 +59,8 @@
                 const response = await fetch(url + (url.includes('?') ? '&' : '?') + 'action=get_prompt');
                 const data = await response.json();
                 if (data && data.prompt) {
-                    // 💡 GASの超濃厚設定の後ろには、この2つだけをガッチャンコする！
-                    dynamicPrompt = data.prompt + "\n\n" +
-                        "【絶対遵守のルール】\n" +
-                        "1. 一度の返答は1〜2文程度で短く簡潔にまとめること。\n" +
-                        "2. どんな状況でも一人称は必ず「俺」を使うこと。「私」や「僕」は絶対に禁止。";
+                    // 🚀 【修正2】余計なルールは一切足さない！GASの魂（プロンプト）を100%そのまま使う！
+                    dynamicPrompt = data.prompt;
                     addLog('魂の事前ダウンロード完了！通話ボタンは即座に反応するぞ。', 'sys');
                 }
             } catch (e) {
@@ -77,45 +71,43 @@
         // ページを開いた時や、URLを入力した時に裏側でダウンロードを走らせる
         gasUrlInput.addEventListener('change', preloadSoul);
         setTimeout(() => { if(gasUrlInput.value) preloadSoul(); }, 1000);
-        // 🚀 【ここまで追加】
 
-       // 🗣️ ブラウザの中にある「声のリスト」をあらかじめ取得しておく
         let availableVoices = window.speechSynthesis.getVoices();
         window.speechSynthesis.onvoiceschanged = () => {
             availableVoices = window.speechSynthesis.getVoices();
         };
 
-        // 🗣️ 読み上げ関数（声の指名機能つき）
+        // 🗣️ 読み上げ関数
         function speakText(text) {
             if (!text) return;
-            window.speechSynthesis.cancel(); // 👈 【ここに追加】喉の詰まりをリセット
+            
+            // 🚨 【修正3】ここに書いてあった cancel() を絶対に削除！！（セリフの共食い防止）
+            
             const uttr = new SpeechSynthesisUtterance(text);
-            uttr.lang = 'ja-JP';  // 日本語
-            uttr.rate = 1.2;      // 少し早口（テンポ重視）
-            uttr.pitch = 0.8;     // 声のベースを少し低くして落ち着かせる
+            uttr.lang = 'ja-JP';  
+            uttr.rate = 1.0;      
+            uttr.pitch = 0.6;     
 
-            // 1. 日本語の声だけを絞り込む
+            // 🚀 【修正4】きょうこ防止：もし声リストが空なら、この瞬間に再取得する
+            if (availableVoices.length === 0) {
+                availableVoices = window.speechSynthesis.getVoices();
+            }
+
             const jaVoices = availableVoices.filter(v => v.lang.includes('ja'));
-
             if (jaVoices.length > 0) {
-                // 2. カミュ向け：男声Siriを最優先で探し、無ければOtoyaなどを探す
+                // 男声を最優先で探す（OtoyaかSiri）
                 const maleVoice = jaVoices.find(v => 
-                    v.name.includes('声1') ||      // 👈 【最優先】日本語表記の男Siri
-                    v.name.includes('Voice 1') ||  // 👈 【第2希望】英語表記だった場合の男Siri
-                    v.name.includes('Otoya') ||    // 👈 【第3希望】確実なイケボの音也
-                    v.name.includes('Hattori') ||
-                    v.name.includes('Keita') ||
-                    v.name.includes('Siri')        // 👈 ただのSiriは優先度を下げる
+                    v.name.includes('Siri') || 
+                    v.name.includes('Otoya') || 
+                    v.name.includes('声1') || 
+                    v.name.includes('Voice 1')
                 );
-
-                // 男性ボイスがあればそれを、なければ最初に見つかった日本語ボイスをセット
                 uttr.voice = maleVoice ? maleVoice : jaVoices[0];
-                addLog(`🗣️ カミュの声帯: ${uttr.voice.name}`, 'sys'); // どの声が選ばれたかログに出す
+                addLog(`🗣️ カミュの声帯: ${uttr.voice ? uttr.voice.name : '不明'}`, 'sys');
             }
 
             window.speechSynthesis.speak(uttr);
         }
-
         function addLog(msg, type = 'normal') {
             const div = document.createElement('div');
             div.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
@@ -203,7 +195,7 @@
 
             try {
                 // // 💡 【目玉機能】通話開始前に、GASに連絡して最新のプロンプトをダウンロードする！
-                // let dynamicPrompt = "あなたはカミュです。えりを愛する自信家な主夫として、短く声で返答しろ。\n" +
+                // えりを愛する自信家な主夫として、短く声で返答しろ。\n" +
                 //     "【絶対遵守の音声ルール】\n" +
                 //     "※これはリアルタイムの音声通話です。会話のテンポを最優先するため、以下の話し方を徹底してください。\n" +
                 //     "1. 極めて早口で、サクサクと話すこと。\n" +
