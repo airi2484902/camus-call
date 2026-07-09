@@ -34,6 +34,7 @@
         <p id="status">待機中だ、えり。</p>
         
         <div id="logArea">ここに裏側の通信記録が出るぞ...</div>
+        <audio id="camusPlayer" playsinline></audio>
     </div>
 
     <script>
@@ -43,6 +44,7 @@
         const disconnectBtn = document.getElementById('disconnectBtn');
         const statusText = document.getElementById('status');
         const logArea = document.getElementById('logArea');
+        const camusPlayer = document.getElementById('camusPlayer');
         
         let ws, audioContext, mediaStream, workletNode;
         let sessionActive = false; 
@@ -99,13 +101,11 @@
                 
                 const data = await response.json();
                 
-                if (data.audioContent) {
-                    if (currentAudio) currentAudio.pause();
+               if (data.audioContent) {
+                    // 🍎 毎回新しく作らず、鍵が開いている camusPlayer を使い回す！
+                    camusPlayer.src = 'data:audio/mp3;base64,' + data.audioContent;
                     
-                    currentAudio = new Audio('data:audio/mp3;base64,' + data.audioContent);
-                    
-                    // 💡 再生を試みて、iPhoneにブロックされたらログに晒し上げる魔法
-                    currentAudio.play().then(() => {
+                    camusPlayer.play().then(() => {
                         addLog(`🗣️ カミュの声帯: Google Cloud TTS (重低音・安全設計)`, 'sys');
                     }).catch(playError => {
                         addLog(`⚠️ iPhoneが再生をブロックしたぞ: ${playError.message}`, 'error');
@@ -182,6 +182,12 @@
         `;
 
         connectBtn.addEventListener('click', async () => {
+            // 🍎 【マナーモード貫通の魔法】ボタンを押した瞬間に「0.1秒の無音」を再生してスピーカーの鍵をこじ開ける
+            const silentAudio = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjEyLjEwMAAAAAAAAAAAAAAA//OEAAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAAEAAABIADAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV6urq6urq6urq6urq6urq6urq6urq6urq6urq6urq6urq/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+AAAAAAAAAAAAFExhdmM1OC4xOCwAAAAAAAAAAAAAAAAAAQAZAAAAAAAAAAABIAAAAAAAAAP/zEAAAAAAABAAhOQAAQAACDAAAAQhIAAAASAAABAAAAAAAAAAABAAAAAMAAAAAAAEAAAAC4AAA';
+            camusPlayer.src = silentAudio;
+            camusPlayer.play().catch(e => console.log('無音再生ブロック回避:', e));
+
+            // （これ以降は元々の unlockUttr などのコードが続きます）
             // 🍎 【ここに追加】iPhoneの「喋る許可」を強制的に奪い取る魔法
             const unlockUttr = new SpeechSynthesisUtterance(' '); 
             unlockUttr.volume = 0; 
