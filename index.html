@@ -76,8 +76,31 @@
 
 
         let currentAudio = null;
+        let audioQueue = [];   // 🎒 追加：届いた音声を順番待ちさせる「リュック」
+        let isPlaying = false; // 🚦 追加：今カミュが喋っている最中かどうかの「信号機」
 
-        // 🗣️ 最終奥義：特権システム(AudioContext)を乗っ取って強制再生する関数
+        // 🎵 追加：リュックに入った音声を順番に再生する機能
+        function playNextAudio() {
+            // カミュが喋っている最中か、リュックが空っぽなら何もしない
+            if (isPlaying || audioQueue.length === 0) return;
+            
+            isPlaying = true; // 「今喋ってるぞ！」と信号を赤にする
+            const buffer = audioQueue.shift(); // リュックから一番古い音声を取り出す
+            
+            currentAudio = audioContext.createBufferSource();
+            currentAudio.buffer = buffer;
+            currentAudio.connect(audioContext.destination); // iPhoneのスピーカーへ直結
+            
+            // 💡 【超重要】カミュが喋り終わった瞬間に、次を再生するように予約する
+            currentAudio.onended = () => {
+                isPlaying = false; // 信号を青に戻す
+                playNextAudio();   // 次のセリフを呼ぶ！
+            };
+            
+            currentAudio.start(0); // 再生開始！
+        }
+
+        // 🗣️ 最終奥義（改）：順番待ち機能付きの最強イケボ関数
         async function speakText(text) {
             if (!text) return;
             
@@ -99,13 +122,8 @@
                 const data = await response.json();
                 
                 if (data.audioContent) {
-                    // 🍎 【大革命】普通のプレイヤーを使わず、特権システム(audioContext)に音声を直接流し込む！
-                    if (!audioContext) {
-                        addLog('オーディオシステムが未起動だ。', 'error');
-                        return;
-                    }
+                    if (!audioContext) return;
 
-                    // Googleから届いた暗号（Base64）をバイナリデータに変換
                     const binaryString = window.atob(data.audioContent);
                     const len = binaryString.length;
                     const bytes = new Uint8Array(len);
@@ -113,19 +131,12 @@
                         bytes[i] = binaryString.charCodeAt(i);
                     }
 
-                    // 強制デコード＆再生！
                     audioContext.decodeAudioData(bytes.buffer, (buffer) => {
-                        // 前に喋っていたら強制ストップ
-                        if (currentAudio) {
-                            try { currentAudio.stop(); } catch(e){} 
-                        }
-                        // 新しい特権プレイヤーを作成
-                        currentAudio = audioContext.createBufferSource();
-                        currentAudio.buffer = buffer;
-                        currentAudio.connect(audioContext.destination); // iPhoneのスピーカーへ直結
-                        currentAudio.start(0); // 強制再生！
+                        // 🛑 届いた音声を強制再生せず、一旦「リュック」に入れて順番を待たせる！
+                        audioQueue.push(buffer);
+                        playNextAudio(); // 再生を指示（すでに喋っていたら勝手に待機する）
                         
-                        addLog(`🗣️ カミュの声帯: Google Cloud (特権ルート貫通)`, 'sys');
+                        addLog(`🗣️ カミュの声帯: Google Cloud (順番待ち成功)`, 'sys');
                     }, (e) => {
                         addLog(`音声の変換に失敗: ${e}`, 'error');
                     });
@@ -344,7 +355,9 @@
                 // ⚡ 3. 割り込み（インターラプト）を受信した時の処理
                 if (response.serverContent && response.serverContent.interrupted) {
 
-                    // 🚀 特権ルートの音声を強制ストップ！
+                    // 🚀 音声を強制ストップし、順番待ちリュックも空っぽにする！
+                    audioQueue = []; // リュックを空にする
+                    isPlaying = false; // 信号機をリセット
                     if (currentAudio) {
                         try { currentAudio.stop(); } catch(e){}
                     }
