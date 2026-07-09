@@ -49,7 +49,7 @@
         let currentTurnText = ""; // 💡 追加：カミュのセリフを一時的に溜めるバケツ
         let fullTranscript = ""; // 🚀 追加：通話全体のセリフを記録するバケツ
         // 🚀 【修正1】デフォルトの魂も余計な指示をなくす
-        let dynamicPrompt = "あなたはカミュです。えりを愛する自信家な主夫だ。一人称は必ず「俺」を使え。";
+        let dynamicPrompt = "あなたはカミュです。えりの恋人だ。";
 
         async function preloadSoul() {
             const url = gasUrlInput.value.trim();
@@ -97,7 +97,7 @@
             if (jaVoices.length > 0) {
                 // 男声を最優先で探す（OtoyaかSiri）
                 const maleVoice = jaVoices.find(v => 
-                    v.name.includes('Siri') || 
+                    v.name.includes('音也') || 
                     v.name.includes('Otoya') || 
                     v.name.includes('声1') || 
                     v.name.includes('Voice 1')
