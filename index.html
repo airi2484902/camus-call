@@ -103,9 +103,13 @@
                     if (currentAudio) currentAudio.pause();
                     
                     currentAudio = new Audio('data:audio/mp3;base64,' + data.audioContent);
-                    currentAudio.play();
                     
-                    addLog(`🗣️ カミュの声帯: Google Cloud TTS (重低音・安全設計)`, 'sys');
+                    // 💡 再生を試みて、iPhoneにブロックされたらログに晒し上げる魔法
+                    currentAudio.play().then(() => {
+                        addLog(`🗣️ カミュの声帯: Google Cloud TTS (重低音・安全設計)`, 'sys');
+                    }).catch(playError => {
+                        addLog(`⚠️ iPhoneが再生をブロックしたぞ: ${playError.message}`, 'error');
+                    });
                 } else {
                     // 💡 失敗した理由（Googleからの生の返答）をそのままログに晒し上げる！
                     addLog('Google激おこ理由: ' + JSON.stringify(data), 'error');
