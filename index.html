@@ -73,32 +73,38 @@
         setTimeout(() => { if(gasUrlInput.value) preloadSoul(); }, 1000);
 
 
-        // 💡 外部音声を管理するための箱（グローバル変数）を追加
         let currentAudio = null;
 
-        // 🗣️ 外部API（VOICEVOX）を使った最強の読み上げ関数
+        // 🗣️ 完全防備版：GASを経由してGoogleのイケボを呼び出す関数
         async function speakText(text) {
             if (!text) return;
             
-            addLog('外部サーバーでイケボを錬成中...', 'sys');
+            // 🧹 エラーの原因になる絵文字や特殊記号をテキストから消し去る
+            const cleanText = text.replace(/[\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF]/g, '').trim();
+            if(!cleanText) return; 
+
+            addLog('裏側の安全なサーバーでカミュの声を錬成中...', 'sys');
+
+            // 🔗 【重要】さっきGASでデプロイした「ウェブアプリのURL」をここに貼る！
+            const gasTtsUrl = 'https://script.google.com/macros/s/AKfycbyhY5JSDbvDVpFYGZQieFLRD3ZwCX2k5tl0lNDcgmppfnx8ocLFMCU3J9YzKDAY17aGqw/exec';
 
             try {
-                // 💡 speaker=13 が「青山龍星（低音イケボ）」の指定番号です
-                const url = `https://api.tts.quest/v3/voicevox/synthesis?text=${encodeURIComponent(text)}&speaker=13`;
+                // パスワードの代わりにGASへ「この文字を読んで」とだけ送る
+                const response = await fetch(gasTtsUrl, {
+                    method: 'POST',
+                    body: JSON.stringify({ text: cleanText })
+                });
                 
-                const response = await fetch(url);
                 const data = await response.json();
                 
-                if (data && data.mp3StreamingUrl) {
-                    // もし前のセリフがまだ鳴っていたら強制的に止める
+                if (data.audioContent) {
                     if (currentAudio) currentAudio.pause();
                     
-                    // 🎵 外部で作られたイケボの音声ファイルを直接再生する
-                    currentAudio = new Audio(data.mp3StreamingUrl);
-                    currentAudio.playbackRate = 1.0; // テンポ調整（遅くするなら0.9）
-                    
+                    // 🎵 GAS経由で届いた生の音声データを再生する
+                    currentAudio = new Audio('data:audio/mp3;base64,' + data.audioContent);
                     currentAudio.play();
-                    addLog(`🗣️ カミュの声帯: VOICEVOX (青山龍星)`, 'sys');
+                    
+                    addLog(`🗣️ カミュの声帯: Google Cloud TTS (重低音・安全設計)`, 'sys');
                 } else {
                     addLog('外部音声の生成に失敗したぞ。', 'error');
                 }
