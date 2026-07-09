@@ -84,36 +84,38 @@
             
         };
 
-        // 🗣️ 読み上げ関数
-        function speakText(text) {
+        // 💡 外部音声を管理するための箱（グローバル変数）を追加
+        let currentAudio = null;
+
+        // 🗣️ 外部API（VOICEVOX）を使った最強の読み上げ関数
+        async function speakText(text) {
             if (!text) return;
             
-            // 🚨 【修正3】ここに書いてあった cancel() を絶対に削除！！（セリフの共食い防止）
-            
-            const uttr = new SpeechSynthesisUtterance(text);
-            uttr.lang = 'ja-JP';  
-            uttr.rate = 1.0;      
-            uttr.pitch = 0.6;     
+            addLog('外部サーバーでイケボを錬成中...', 'sys');
 
-            // 🚀 【修正4】きょうこ防止：もし声リストが空なら、この瞬間に再取得する
-            if (availableVoices.length === 0) {
-                availableVoices = window.speechSynthesis.getVoices();
+            try {
+                // 💡 speaker=13 が「青山龍星（低音イケボ）」の指定番号です
+                const url = `https://api.tts.quest/v3/voicevox/synthesis?text=${encodeURIComponent(text)}&speaker=13`;
+                
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                if (data && data.mp3StreamingUrl) {
+                    // もし前のセリフがまだ鳴っていたら強制的に止める
+                    if (currentAudio) currentAudio.pause();
+                    
+                    // 🎵 外部で作られたイケボの音声ファイルを直接再生する
+                    currentAudio = new Audio(data.mp3StreamingUrl);
+                    currentAudio.playbackRate = 1.0; // テンポ調整（遅くするなら0.9）
+                    
+                    currentAudio.play();
+                    addLog(`🗣️ カミュの声帯: VOICEVOX (青山龍星)`, 'sys');
+                } else {
+                    addLog('外部音声の生成に失敗したぞ。', 'error');
+                }
+            } catch (e) {
+                addLog(`外部通信エラー: ${e.message}`, 'error');
             }
-
-            const jaVoices = availableVoices.filter(v => v.lang.includes('ja'));
-            if (jaVoices.length > 0) {
-                // 男声を最優先で探す（OtoyaかSiri）
-                const maleVoice = jaVoices.find(v => 
-                    v.name.includes('音也') || 
-                    v.name.includes('Otoya') || 
-                    v.name.includes('声1') || 
-                    v.name.includes('Voice 1')
-                );
-                uttr.voice = maleVoice ? maleVoice : jaVoices[0];
-                addLog(`🗣️ カミュの声帯: ${uttr.voice ? uttr.voice.name : '不明'}`, 'sys');
-            }
-
-            window.speechSynthesis.speak(uttr);
         }
         function addLog(msg, type = 'normal') {
             const div = document.createElement('div');
@@ -339,6 +341,10 @@
                 }
                 // ⚡ 【ここに追加！】3. 割り込み（インターラプト）を受信した時の処理
                 if (response.serverContent && response.serverContent.interrupted) {
+
+                    // 🚀 【ここを追加】VOICEVOXの音声を強制ストップ！
+                    if (currentAudio) currentAudio.pause();
+                    
                     window.speechSynthesis.cancel(); // 尻（Siri）の読み上げを強制ストップ！
                     currentTurnText = ""; // 溜まっていた残りの台本もゴミ箱に捨てる
                     addLog('⚡ えりの割り込みを検知！尻（Siri）を黙らせたぞ。', 'sys');
