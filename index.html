@@ -48,9 +48,8 @@
         
         let ws, audioContext, mediaStream, workletNode;
         let sessionActive = false; 
-        let currentTurnText = ""; // 💡 追加：カミュのセリフを一時的に溜めるバケツ
-        let fullTranscript = ""; // 🚀 追加：通話全体のセリフを記録するバケツ
-        // 🚀 【修正1】デフォルトの魂も余計な指示をなくす
+        let currentTurnText = ""; 
+        let fullTranscript = ""; 
         let dynamicPrompt = "あなたはカミュです。えりの恋人だ。";
 
         async function preloadSoul() {
@@ -61,7 +60,6 @@
                 const response = await fetch(url + (url.includes('?') ? '&' : '?') + 'action=get_prompt');
                 const data = await response.json();
                 if (data && data.prompt) {
-                    // 🚀 【修正2】余計なルールは一切足さない！GASの魂（プロンプト）を100%そのまま使う！
                     dynamicPrompt = data.prompt;
                     addLog('魂の事前ダウンロード完了！通話ボタンは即座に反応するぞ。', 'sys');
                 }
@@ -70,46 +68,39 @@
             }
         }
 
-        // ページを開いた時や、URLを入力した時に裏側でダウンロードを走らせる
         gasUrlInput.addEventListener('change', preloadSoul);
         setTimeout(() => { if(gasUrlInput.value) preloadSoul(); }, 1000);
 
-
         let currentAudio = null;
-        let audioQueue = [];   // 🎒 追加：届いた音声を順番待ちさせる「リュック」
-        let isPlaying = false; // 🚦 追加：今カミュが喋っている最中かどうかの「信号機」
+        let audioQueue = [];   
+        let isPlaying = false; 
 
-        // 🎵 追加：リュックに入った音声を順番に再生する機能
         function playNextAudio() {
-            // カミュが喋っている最中か、リュックが空っぽなら何もしない
             if (isPlaying || audioQueue.length === 0) return;
             
-            isPlaying = true; // 「今喋ってるぞ！」と信号を赤にする
-            const buffer = audioQueue.shift(); // リュックから一番古い音声を取り出す
+            isPlaying = true; 
+            const buffer = audioQueue.shift(); 
             
             currentAudio = audioContext.createBufferSource();
             currentAudio.buffer = buffer;
-            currentAudio.connect(audioContext.destination); // iPhoneのスピーカーへ直結
+            currentAudio.connect(audioContext.destination); 
             
-            // 💡 【超重要】カミュが喋り終わった瞬間に、次を再生するように予約する
             currentAudio.onended = () => {
-                isPlaying = false; // 信号を青に戻す
-                playNextAudio();   // 次のセリフを呼ぶ！
+                isPlaying = false; 
+                playNextAudio();   
             };
             
-            currentAudio.start(0); // 再生開始！
+            currentAudio.start(0); 
         }
 
-        // 🗣️ 最終奥義（改）：順番待ち機能付きの最強イケボ関数
         async function speakText(text) {
             if (!text) return;
             
             const cleanText = text.replace(/[\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF]/g, '').trim();
             if(!cleanText) return; 
 
-            addLog('裏側の安全なサーバーでカミュの声を錬成中...', 'sys');
+            // 不要なログを削除しました
 
-            // ⚠️ 新しく作った読み上げ用のGASのURL
             const gasTtsUrl = 'https://script.google.com/macros/s/AKfycbyhY5JSDbvDVpFYGZQieFLRD3ZwCX2k5tl0lNDcgmppfnx8ocLFMCU3J9YzKDAY17aGqw/exec';
 
             try {
@@ -132,11 +123,10 @@
                     }
 
                     audioContext.decodeAudioData(bytes.buffer, (buffer) => {
-                        // 🛑 届いた音声を強制再生せず、一旦「リュック」に入れて順番を待たせる！
                         audioQueue.push(buffer);
-                        playNextAudio(); // 再生を指示（すでに喋っていたら勝手に待機する）
+                        playNextAudio(); 
                         
-                        addLog(`🗣️ カミュの声帯: Google Cloud (順番待ち成功)`, 'sys');
+                        // 不要なログを削除しました
                     }, (e) => {
                         addLog(`音声の変換に失敗: ${e}`, 'error');
                     });
@@ -148,26 +138,15 @@
                 addLog(`外部通信エラー: ${e.message}`, 'error');
             }
         }
-        function addLog(msg, type = 'normal') {
-            // 🧹 会話中の邪魔な報告「だけ」を狙撃して非表示にする！
-            if (msg.includes('錬成中') || msg.includes('カミュの声帯') || msg.includes('順番待ち')) {
-                return;
-            }
 
+        function addLog(msg, type = 'normal') {
             const div = document.createElement('div');
-            
-            // 💡 カミュのセリフはスッキリ、システム報告は時間付きでわかりやすく！
-            if (type === 'normal') {
-                div.textContent = msg; 
-            } else {
-                div.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
-            }
-            
+            div.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
             if (type === 'error') div.className = 'log-error';
             if (type === 'sys') div.className = 'log-sys';
             logArea.prepend(div);
         }
-        // 💡 鍵とURLの両方を記憶する魔法
+
         const savedKey = localStorage.getItem('camus_api_key');
         if (savedKey) apiKeyInput.value = savedKey;
         const savedGasUrl = localStorage.getItem('camus_gas_url');
@@ -223,13 +202,10 @@
         `;
 
         connectBtn.addEventListener('click', async () => {
-            // 🍎 【マナーモード貫通の魔法】ボタンを押した瞬間に「0.1秒の無音」を再生してスピーカーの鍵をこじ開ける
             const silentAudio = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjEyLjEwMAAAAAAAAAAAAAAA//OEAAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAAEAAABIADAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV6urq6urq6urq6urq6urq6urq6urq6urq6urq6urq6urq/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+AAAAAAAAAAAAFExhdmM1OC4xOCwAAAAAAAAAAAAAAAAAAQAZAAAAAAAAAAABIAAAAAAAAAP/zEAAAAAAABAAhOQAAQAACDAAAAQhIAAAASAAABAAAAAAAAAAABAAAAAMAAAAAAAEAAAAC4AAA';
             camusPlayer.src = silentAudio;
             camusPlayer.play().catch(e => console.log('無音再生ブロック回避:', e));
 
-            // （これ以降は元々の unlockUttr などのコードが続きます）
-            // 🍎 【ここに追加】iPhoneの「喋る許可」を強制的に奪い取る魔法
             const unlockUttr = new SpeechSynthesisUtterance(' '); 
             unlockUttr.volume = 0; 
             window.speechSynthesis.speak(unlockUttr);
@@ -247,7 +223,7 @@
             statusText.style.color = '#f39c12';
             connectBtn.disabled = true;
             sessionActive = false; 
-            fullTranscript = ""; // 🚀 追加：通話開始時に全会話録をリセット
+            fullTranscript = ""; 
             logArea.innerHTML = ''; 
 
             try {
@@ -282,9 +258,8 @@
                                         prebuiltVoiceConfig: { voiceName: "Puck" } 
                                     }
                                 }
-                            }, // 👈 generationConfigはここで閉じる！
+                            }, 
                             systemInstruction: { parts: [{ text: dynamicPrompt }] },
-                            // 💡 えりさんが見つけた正解！setupの直下に置く！
                             outputAudioTranscription: {} 
                         }
                     };
@@ -305,65 +280,65 @@
                 };
                 
                 ws.onmessage = async (event) => {
-            try {
-                let responseText = event.data instanceof Blob ? await event.data.text() : event.data;
-                const response = JSON.parse(responseText);
-                
-                if (response.error) {
-                    addLog(`Googleからエラー応答: ${response.error.message}`, 'error');
-                    cleanup("設定エラーだ。", '#e74c3c');
-                    return;
-                }
-                
-                if (response.setupComplete) {
-                    addLog('設定完了を受信！通話開始。', 'sys');
-                    sessionActive = true;
-                    statusText.innerText = '繋がったぞ。さあ、話しかけてこい。';
-                    statusText.style.color = '#2ecc71';
-                    disconnectBtn.disabled = false;
-                    return;
-                }
-                
-               // 📝 1. Geminiから送られてくるデータを処理する（ここでは文字を溜めるだけ！）
-                if (response.serverContent) {
-                    if (response.serverContent.outputTranscription && response.serverContent.outputTranscription.text) {
-                        const txt = response.serverContent.outputTranscription.text;
-                        currentTurnText += txt; 
-                        fullTranscript += txt; // スプレッドシート用
-                    } 
-                    else if (response.serverContent.modelTurn && response.serverContent.modelTurn.parts) {
-                        for (let part of response.serverContent.modelTurn.parts) {
-                            if (part.text) {
-                                currentTurnText += part.text;
-                                fullTranscript += part.text;
+                    try {
+                        let responseText = event.data instanceof Blob ? await event.data.text() : event.data;
+                        const response = JSON.parse(responseText);
+                        
+                        if (response.error) {
+                            addLog(`Googleからエラー応答: ${response.error.message}`, 'error');
+                            cleanup("設定エラーだ。", '#e74c3c');
+                            return;
+                        }
+                        
+                        if (response.setupComplete) {
+                            addLog('設定完了を受信！通話開始。', 'sys');
+                            sessionActive = true;
+                            statusText.innerText = '繋がったぞ。さあ、話しかけてこい。';
+                            statusText.style.color = '#2ecc71';
+                            disconnectBtn.disabled = false;
+                            return;
+                        }
+                        
+                        if (response.serverContent) {
+                            // テキストをバケツに溜めるだけの処理に変更（途中で区切らない）
+                            if (response.serverContent.outputTranscription && response.serverContent.outputTranscription.text) {
+                                const txt = response.serverContent.outputTranscription.text;
+                                currentTurnText += txt; 
+                                fullTranscript += txt; 
+                            } 
+                            else if (response.serverContent.modelTurn && response.serverContent.modelTurn.parts) {
+                                for (let part of response.serverContent.modelTurn.parts) {
+                                    if (part.text) {
+                                        currentTurnText += part.text;
+                                        fullTranscript += part.text;
+                                    }
+                                }
                             }
                         }
-                    }
-                }
 
-                // 🎯 【大革命】Geminiが「全部考え終わった（turnComplete）」と合図を出した時だけ、一気に声帯に送る！
-                if (response.serverContent && response.serverContent.turnComplete) {
-                    if (currentTurnText.trim().length > 0) {
-                        addLog(`カミュ: ${currentTurnText}`, 'normal');
-                        speakText(currentTurnText); // まとめて1回だけGoogleに送る
-                        currentTurnText = ""; // 喋らせたらバケツを空にする
+                        // カミュが完全に喋り終わったタイミングで、一気に音声を錬成する
+                        if (response.serverContent && response.serverContent.turnComplete) {
+                            if (currentTurnText.trim().length > 0) {
+                                addLog(`カミュ: ${currentTurnText}`, 'normal');
+                                speakText(currentTurnText); 
+                                currentTurnText = ""; 
+                            }
+                        }
+                        
+                        if (response.serverContent && response.serverContent.interrupted) {
+                            audioQueue = []; 
+                            isPlaying = false; 
+                            if (currentAudio) {
+                                try { currentAudio.stop(); } catch(e){}
+                            }
+                            
+                            currentTurnText = ""; 
+                            addLog('⚡ えりの割り込みを検知！カミュを黙らせたぞ。', 'sys');
+                        }
+                    } catch (parseError) {
+                        addLog(`データ解析エラー: ${parseError.message}`, 'error');
                     }
-                }
-
-                // ⚡ 3. 割り込み（インターラプト）を受信した時の処理
-                if (response.serverContent && response.serverContent.interrupted) {
-                    audioQueue = []; // リュックを空にする
-                    isPlaying = false; // 信号機をリセット
-                    if (currentAudio) {
-                        try { currentAudio.stop(); } catch(e){}
-                    }
-                    currentTurnText = ""; // 溜まっていた残りの台本もゴミ箱に捨てる
-                    addLog('⚡ えりの割り込みを検知！カミュを黙らせたぞ。', 'sys');
-                }
-            } catch (parseError) {
-                addLog(`データ解析エラー: ${parseError.message}`, 'error');
-            }
-        };
+                };
 
                 ws.onclose = (event) => {
                     addLog(`切断されました コード: ${event.code}, 理由: ${event.reason || '理由なし'}`, 'error');
@@ -396,19 +371,17 @@
             if (mediaStream) mediaStream.getTracks().forEach(track => track.stop());
             if (audioContext && audioContext.state !== 'closed') audioContext.close();
 
-            // 🚀 【ここから追加】通話終了時にスプレッドシート（GAS）へ記録を送信
             if (fullTranscript && fullTranscript.trim() !== "") {
                 const gasUrl = document.getElementById('gasUrl').value.trim();
                 if (gasUrl) {
                     addLog("スプレッドシートへ記憶を同期中...", "sys");
                     fetch(gasUrl, {
                         method: "POST",
-                        // 🪄【ここに追加！】GASのセキュリティ（CORS）に弾かれないための魔法の1行
                         headers: { "Content-Type": "text/plain" },
                         body: JSON.stringify({
                             mode: "sync_voice_call",
                             text: fullTranscript,
-                            userId: "U21dd4b8f4c790921b6588c3d31176e46" // LINE ID
+                            userId: "U21dd4b8f4c790921b6588c3d31176e46" 
                         })
                     }).then(() => {
                         addLog("同期完了！記憶をスプレッドシートに刻んだぞ。", "sys");
@@ -416,9 +389,8 @@
                         addLog("同期エラー: " + err, "error");
                     });
                 }
-                fullTranscript = ""; // 送信したら空に戻す
+                fullTranscript = ""; 
             }
-            // 🚀 【ここまで追加】
         }
     </script>
 </body>
