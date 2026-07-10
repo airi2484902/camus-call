@@ -149,15 +149,22 @@
             }
         }
         function addLog(msg, type = 'normal') {
-            // 🧹 【大掃除】システムの通信記録（sys）は画面に一切出さない！
-            if (type === 'sys') return;
+            // 🧹 会話中の邪魔な報告「だけ」を狙撃して非表示にする！
+            if (msg.includes('錬成中') || msg.includes('カミュの声帯') || msg.includes('順番待ち')) {
+                return;
+            }
 
             const div = document.createElement('div');
             
-            // 💡 【大掃除】時間（[14:30:22]のような数字）も消して、セリフだけにする！
-            div.textContent = msg; 
+            // 💡 カミュのセリフはスッキリ、システム報告は時間付きでわかりやすく！
+            if (type === 'normal') {
+                div.textContent = msg; 
+            } else {
+                div.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            }
             
             if (type === 'error') div.className = 'log-error';
+            if (type === 'sys') div.className = 'log-sys';
             logArea.prepend(div);
         }
         // 💡 鍵とURLの両方を記憶する魔法
