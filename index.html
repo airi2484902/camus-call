@@ -236,7 +236,8 @@
                 ws.onmessage = async (event) => {
                     try {
                         let responseText = event.data instanceof Blob ? await event.data.text() : event.data;
-                        const response = JSON.parse(responseText);
+                        // 🌹 【追加】Geminiから来た生のデータを無理やり画面に出す調査用コード
+                        addLog(`【裏側データ】: ${responseText.substring(0, 150)}...`, 'sys');
                         
                         if (response.error) {
                             addLog(`Googleからエラー応答: ${response.error.message}`, 'error');
