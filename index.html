@@ -195,7 +195,7 @@
                 source.connect(workletNode);
                 
                 const url = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=" + apiKey;
-                addLog('Googleサーバー(v1beta)へ接続開始...', 'sys');
+                addLog('Googleサーバーへ接続開始...', 'sys');
                 ws = new WebSocket(url);
                 
                 ws.onopen = () => {
@@ -238,8 +238,10 @@
                         let responseText = event.data instanceof Blob ? await event.data.text() : event.data;
                         const response = JSON.parse(responseText);
                         
-                        // 🌹 調査用コード
-                        addLog(`【裏側データ】: ${responseText.substring(0, 150)}...`, 'sys');
+                        // 生データの動きを監視するコード
+                        if(responseText.length > 50) {
+                            addLog(`受信: ${responseText.substring(0, 60)}...`, 'sys');
+                        }
                         
                         if (response.error) {
                             addLog(`Googleからエラー応答: ${response.error.message}`, 'error');
@@ -268,19 +270,21 @@
                                         currentTurnText += part.text;
                                         fullTranscript += part.text;
                                     }
-                                    // Geminiの無料音声を鳴らす処理
+                                    
+                                    // 🌹 Geminiの生音声をブラウザで直接鳴らす（完全無料！）
                                     if (part.inlineData && part.inlineData.data) {
-                                        const base64Audio = part.inlineData.data;
-                                        const binaryString = window.atob(base64Audio);
-                                        const len = binaryString.length;
-                                        const pcmData = new Int16Array(len / 2);
-                                        for (let i = 0; i < len; i += 2) {
-                                            pcmData[i / 2] = binaryString.charCodeAt(i) | (binaryString.charCodeAt(i + 1) << 8);
+                                        const binaryString = window.atob(part.inlineData.data);
+                                        const bytes = new Uint8Array(binaryString.length);
+                                        for (let i = 0; i < binaryString.length; i++) {
+                                            bytes[i] = binaryString.charCodeAt(i);
                                         }
+                                        const pcmData = new Int16Array(bytes.buffer);
                                         const float32Data = new Float32Array(pcmData.length);
                                         for (let i = 0; i < pcmData.length; i++) {
                                             float32Data[i] = pcmData[i] / 32768.0;
                                         }
+                                        
+                                        // Gemini Liveの音声出力は24000Hz固定です
                                         const buffer = audioContext.createBuffer(1, float32Data.length, 24000);
                                         buffer.copyToChannel(float32Data, 0);
                                         
