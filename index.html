@@ -209,7 +209,7 @@
                                 responseModalities: ["AUDIO"], 
                                 speechConfig: {
                                     voiceConfig: {
-                                        prebuiltVoiceConfig: { voiceName: "Kore" } 
+                                        prebuiltVoiceConfig: { voiceName: "Fenrir" } 
                                     }
                                 }
                             }, 
@@ -238,10 +238,6 @@
                         let responseText = event.data instanceof Blob ? await event.data.text() : event.data;
                         const response = JSON.parse(responseText);
                         
-                        // 生データの動きを監視するコード
-                        if(responseText.length > 50) {
-                            addLog(`受信: ${responseText.substring(0, 60)}...`, 'sys');
-                        }
                         
                         if (response.error) {
                             addLog(`Googleからエラー応答: ${response.error.message}`, 'error');
