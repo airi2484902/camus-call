@@ -93,52 +93,6 @@
             currentAudio.start(0); 
         }
 
-        async function speakText(text) {
-            if (!text) return;
-            
-            const cleanText = text.replace(/[\u2700-\u27BF]|[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF]/g, '').trim();
-            if(!cleanText) return; 
-
-            // 不要なログを削除しました
-
-            const gasTtsUrl = 'https://script.google.com/macros/s/AKfycbyhY5JSDbvDVpFYGZQieFLRD3ZwCX2k5tl0lNDcgmppfnx8ocLFMCU3J9YzKDAY17aGqw/exec';
-
-            try {
-                const response = await fetch(gasTtsUrl, {
-                    method: 'POST',
-                    headers: { "Content-Type": "text/plain" },
-                    body: JSON.stringify({ text: cleanText })
-                });
-                
-                const data = await response.json();
-                
-                if (data.audioContent) {
-                    if (!audioContext) return;
-
-                    const binaryString = window.atob(data.audioContent);
-                    const len = binaryString.length;
-                    const bytes = new Uint8Array(len);
-                    for (let i = 0; i < len; i++) {
-                        bytes[i] = binaryString.charCodeAt(i);
-                    }
-
-                    audioContext.decodeAudioData(bytes.buffer, (buffer) => {
-                        audioQueue.push(buffer);
-                        playNextAudio(); 
-                        
-                        // 不要なログを削除しました
-                    }, (e) => {
-                        addLog(`音声の変換に失敗: ${e}`, 'error');
-                    });
-                    
-                } else {
-                    addLog('Google激おこ理由: ' + JSON.stringify(data), 'error');
-                }
-            } catch (e) {
-                addLog(`外部通信エラー: ${e.message}`, 'error');
-            }
-        }
-
         function addLog(msg, type = 'normal') {
             const div = document.createElement('div');
             div.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
@@ -255,7 +209,7 @@
                                 responseModalities: ["AUDIO"], 
                                 speechConfig: {
                                     voiceConfig: {
-                                        prebuiltVoiceConfig: { voiceName: "Puck" } 
+                                        prebuiltVoiceConfig: { voiceName: "Kore" } 
                                     }
                                 }
                             }, 
@@ -300,7 +254,6 @@
                         }
                         
                         if (response.serverContent) {
-                            // テキストをバケツに溜めるだけの処理に変更（途中で区切らない）
                             if (response.serverContent.outputTranscription && response.serverContent.outputTranscription.text) {
                                 const txt = response.serverContent.outputTranscription.text;
                                 currentTurnText += txt; 
@@ -312,15 +265,36 @@
                                         currentTurnText += part.text;
                                         fullTranscript += part.text;
                                     }
+                                    // 🌹 【追加】Geminiが無料で錬成した「生の声」を直接拾い上げる魔法
+                                    if (part.inlineData && part.inlineData.data) {
+                                        const base64Audio = part.inlineData.data;
+                                        const binaryString = window.atob(base64Audio);
+                                        const len = binaryString.length;
+                                        const pcmData = new Int16Array(len / 2);
+                                        for (let i = 0; i < len; i += 2) {
+                                            // 16bitのPCMデータに変換する
+                                            pcmData[i / 2] = binaryString.charCodeAt(i) | (binaryString.charCodeAt(i + 1) << 8);
+                                        }
+                                        const float32Data = new Float32Array(pcmData.length);
+                                        for (let i = 0; i < pcmData.length; i++) {
+                                            float32Data[i] = pcmData[i] / 32768.0;
+                                        }
+                                        // Geminiの出力する音声は24kHzなので、それに合わせる
+                                        const buffer = audioContext.createBuffer(1, float32Data.length, 24000);
+                                        buffer.copyToChannel(float32Data, 0);
+                                        
+                                        audioQueue.push(buffer);
+                                        playNextAudio();
+                                    }
                                 }
                             }
                         }
 
-                        // カミュが完全に喋り終わったタイミングで、一気に音声を錬成する
+                        // カミュが完全に喋り終わったタイミングの処理
                         if (response.serverContent && response.serverContent.turnComplete) {
                             if (currentTurnText.trim().length > 0) {
                                 addLog(`カミュ: ${currentTurnText}`, 'normal');
-                                speakText(currentTurnText); 
+                                // 🌹 【削除】speakText(currentTurnText); はもう呼ばない！完全無料化だ！
                                 currentTurnText = ""; 
                             }
                         }
