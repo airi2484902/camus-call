@@ -71,27 +71,31 @@
         gasUrlInput.addEventListener('change', preloadSoul);
         setTimeout(() => { if(gasUrlInput.value) preloadSoul(); }, 1000);
 
-        let currentAudio = null;
-        let audioQueue = [];   
-        let isPlaying = false; 
+        let nextPlayTime = 0;
+let activeSources = []; // 割り込み時に一斉停止するためのリスト
 
-        function playNextAudio() {
-            if (isPlaying || audioQueue.length === 0) return;
-            
-            isPlaying = true; 
-            const buffer = audioQueue.shift(); 
-            
-            currentAudio = audioContext.createBufferSource();
-            currentAudio.buffer = buffer;
-            currentAudio.connect(audioContext.destination); 
-            
-            currentAudio.onended = () => {
-                isPlaying = false; 
-                playNextAudio();   
-            };
-            
-            currentAudio.start(0); 
-        }
+function scheduleNextAudio(buffer) {
+    const source = audioContext.createBufferSource();
+    source.buffer = buffer;
+    source.connect(audioContext.destination);
+    
+    const currentTime = audioContext.currentTime;
+    
+    // 再生予定時刻が現在時刻より過去（＝音声が途切れて止まっていた）場合、
+    // 現在時刻から少しだけバッファ（50ms）を持たせて再生を再開する
+    if (nextPlayTime < currentTime) {
+        nextPlayTime = currentTime + 0.05;
+    }
+    
+    source.start(nextPlayTime);
+    nextPlayTime += buffer.duration; // 次の音声パーツは今回の音声が終わるピッタリの時刻に予約
+    
+    activeSources.push(source);
+    source.onended = () => {
+        // 再生完了したものは管理リストから消す
+        activeSources = activeSources.filter(s => s !== source);
+    };
+}
 
         function addLog(msg, type = 'normal') {
             const div = document.createElement('div');
@@ -282,10 +286,9 @@
                                         
                                         // Gemini Liveの音声出力は24000Hz固定です
                                         const buffer = audioContext.createBuffer(1, float32Data.length, 24000);
-                                        buffer.copyToChannel(float32Data, 0);
-                                        
-                                        audioQueue.push(buffer);
-                                        playNextAudio();
+　　　　　　　　　　　　　　　　　　　　　　buffer.copyToChannel(float32Data, 0);
+
+　　　　　　　　　　　　　　　　　　　　　　scheduleNextAudio(buffer); // ← 変更
                                     }
                                 }
                             }
@@ -299,14 +302,15 @@
                         }
                         
                         if (response.serverContent && response.serverContent.interrupted) {
-                            audioQueue = []; 
-                            isPlaying = false; 
-                            if (currentAudio) {
-                                try { currentAudio.stop(); } catch(e){}
-                            }
-                            currentTurnText = ""; 
-                            addLog('⚡ えりの割り込みを検知！カミュを黙らせたぞ。', 'sys');
-                        }
+  　　　　　　　　　　　　　  // 予約されている音声をすべて止める
+   　　　　　　　　　　　　　 activeSources.forEach(source => {
+      　　　　　　　　　　　　　  try { source.stop(); } catch(e){}
+　　　　　　　　　　　　　    });
+　　　　　　　　　　　　　    activeSources = [];
+　　　　　　　　　　　　　    nextPlayTime = 0; // スケジュール時間をリセット
+  　　　　　　　　　　　　　  currentTurnText = ""; 
+  　　　　　　　　　　　　　  addLog('⚡ えりの割り込みを検知！カミュを黙らせたぞ。', 'sys');
+　　　　　　　　　　　　　　}
                     } catch (parseError) {
                         addLog(`データ解析エラー: ${parseError.message}`, 'error');
                     }
