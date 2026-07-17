@@ -206,20 +206,20 @@ function scheduleNextAudio(buffer) {
             if (sessionActive && ws.readyState === WebSocket.OPEN && e.data.type === 'audio_out') {
                 const bytes = new Uint8Array(e.data.data);
                 
-                // 💡修正: ブラウザがフリーズしないための「超高速Base64変換」
+                // 💡ブラウザの処理落ち（カミュの早口・途切れ）を防ぐ超高速変換
                 let binaryString = '';
                 const chunkSize = 8192;
                 for (let i = 0; i < bytes.length; i += chunkSize) {
                     binaryString += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
                 }
                 
-                // 💡修正: 実際のサンプルレートをGeminiに伝え、"遅延"と"早送り"を根絶する
+                // 💡修正: エラー1007の原因だった部分を、最新の正しいフォーマット（audio）に戻しました
                 ws.send(JSON.stringify({ 
                     realtimeInput: { 
-                        mediaChunks: [{ 
-                            mimeType: "audio/pcm;rate=" + audioContext.sampleRate, 
+                        audio: { 
+                            mimeType: "audio/pcm;rate=16000", 
                             data: btoa(binaryString) 
-                        }]
+                        } 
                     } 
                 }));
             }
