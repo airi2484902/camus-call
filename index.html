@@ -114,45 +114,23 @@ function scheduleNextAudio(buffer) {
             class CamusAudioProcessor extends AudioWorkletProcessor {
                 constructor() {
                     super();
-                    this.inBuffer = new Int16Array(4096);
+                    // 💡環境の実際のサンプルレートに合わせて0.25秒分のバッファを自動計算
+                    this.chunkSize = Math.floor(sampleRate * 0.25);
+                    this.inBuffer = new Int16Array(this.chunkSize);
                     this.inCount = 0;
-                    this.outBuffer = [];
-                    this.outOffset = 0;
-                    this.port.onmessage = (e) => {
-                        const pcmData = new Int16Array(e.data);
-                        const floatData = new Float32Array(pcmData.length);
-                        for (let i = 0; i < pcmData.length; i++) floatData[i] = pcmData[i] / 32768.0;
-                        this.outBuffer.push(floatData);
-                    };
                 }
                 process(inputs, outputs, parameters) {
                     const input = inputs[0][0];
                     if (input && input.length > 0) {
                         for (let i = 0; i < input.length; i++) {
                             this.inBuffer[this.inCount++] = Math.max(-1, Math.min(1, input[i])) * 32767;
-                            if (this.inCount >= 4096) {
+                            if (this.inCount >= this.chunkSize) {
                                 const sendData = new Int16Array(this.inBuffer);
                                 this.port.postMessage({ type: 'audio_out', data: sendData.buffer }, [sendData.buffer]);
                                 this.inCount = 0;
                             }
                         }
                     }
-
-                    const output = outputs[0][0];
-                    let outIdx = 0;
-                    while (outIdx < output.length && this.outBuffer.length > 0) {
-                        const current = this.outBuffer[0];
-                        const remain = current.length - this.outOffset;
-                        const toCopy = Math.min(remain, output.length - outIdx);
-                        output.set(current.subarray(this.outOffset, this.outOffset + toCopy), outIdx);
-                        outIdx += toCopy;
-                        this.outOffset += toCopy;
-                        if (this.outOffset >= current.length) {
-                            this.outBuffer.shift();
-                            this.outOffset = 0;
-                        }
-                    }
-                    for (; outIdx < output.length; outIdx++) output[outIdx] = 0;
                     return true;
                 }
             }
@@ -225,17 +203,27 @@ function scheduleNextAudio(buffer) {
                 };
 
                 workletNode.port.onmessage = (e) => {
-                    if (sessionActive && ws.readyState === WebSocket.OPEN && e.data.type === 'audio_out') {
-                        const bytes = new Uint8Array(e.data.data);
-                        let binaryString = '';
-                        for (let i = 0; i < bytes.length; i++) binaryString += String.fromCharCode(bytes[i]);
-                        ws.send(JSON.stringify({ 
-                            realtimeInput: { 
-                                audio: { mimeType: "audio/pcm;rate=16000", data: btoa(binaryString) } 
-                            } 
-                        }));
-                    }
-                };
+            if (sessionActive && ws.readyState === WebSocket.OPEN && e.data.type === 'audio_out') {
+                const bytes = new Uint8Array(e.data.data);
+                
+                // 💡修正: ブラウザがフリーズしないための「超高速Base64変換」
+                let binaryString = '';
+                const chunkSize = 8192;
+                for (let i = 0; i < bytes.length; i += chunkSize) {
+                    binaryString += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+                }
+                
+                // 💡修正: 実際のサンプルレートをGeminiに伝え、"遅延"と"早送り"を根絶する
+                ws.send(JSON.stringify({ 
+                    realtimeInput: { 
+                        mediaChunks: [{ 
+                            mimeType: "audio/pcm;rate=" + audioContext.sampleRate, 
+                            data: btoa(binaryString) 
+                        }]
+                    } 
+                }));
+            }
+        };
                 
                 ws.onmessage = async (event) => {
                     try {
