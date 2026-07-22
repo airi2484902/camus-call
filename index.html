@@ -74,6 +74,20 @@
         let nextPlayTime = 0;
 let activeSources = []; // 割り込み時に一斉停止するためのリスト
 
+        let audioRemainder = null;
+let pcmPlaybackBuffer = []; 
+
+function flushPlaybackBuffer() {
+    if (pcmPlaybackBuffer.length === 0) return;
+    const float32Data = new Float32Array(pcmPlaybackBuffer);
+    pcmPlaybackBuffer = []; // 吐き出したら空にする
+    
+    // 24000Hzで再生
+    const buffer = audioContext.createBuffer(1, float32Data.length, 24000);
+    buffer.copyToChannel(float32Data, 0);
+    scheduleNextAudio(buffer);
+}
+
 function scheduleNextAudio(buffer) {
     const source = audioContext.createBufferSource();
     source.buffer = buffer;
@@ -196,7 +210,7 @@ function scheduleNextAudio(buffer) {
                                 }
                             }, 
                             systemInstruction: { parts: [{ text: dynamicPrompt }] },
-                            //outputAudioTranscription: {} 
+                            outputAudioTranscription: {} 
                         }
                     };
                     ws.send(JSON.stringify(setupMessage));
@@ -247,64 +261,72 @@ function scheduleNextAudio(buffer) {
                         }
                         
                         if (response.serverContent) {
+                            // 💡 裏でこっそり履歴だけ保存（画面には出さない）
                             if (response.serverContent.outputTranscription && response.serverContent.outputTranscription.text) {
-                                const txt = response.serverContent.outputTranscription.text;
-                                currentTurnText += txt; 
-                                fullTranscript += txt; 
+                                fullTranscript += response.serverContent.outputTranscription.text; 
                             } 
                             else if (response.serverContent.modelTurn && response.serverContent.modelTurn.parts) {
                                 for (let part of response.serverContent.modelTurn.parts) {
                                     if (part.text) {
-                                        currentTurnText += part.text;
                                         fullTranscript += part.text;
                                     }
                                     
-                                    // 🌹 Geminiの生音声をブラウザで直接鳴らす（完全無料！）
-if (part.inlineData && part.inlineData.data) {
-    const binaryString = window.atob(part.inlineData.data);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-    }
+                                    // 🌹 Geminiの生音声をブラウザで直接鳴らす
+                                    if (part.inlineData && part.inlineData.data) {
+                                        const binaryString = window.atob(part.inlineData.data);
+                                        const newBytes = new Uint8Array(binaryString.length);
+                                        for (let i = 0; i < binaryString.length; i++) {
+                                            newBytes[i] = binaryString.charCodeAt(i);
+                                        }
+                                        
+                                        // 💡 データが途切れても安全に繋ぐ処理
+                                        let bytes;
+                                        if (audioRemainder) {
+                                            bytes = new Uint8Array(audioRemainder.length + newBytes.length);
+                                            bytes.set(audioRemainder, 0);
+                                            bytes.set(newBytes, audioRemainder.length);
+                                            audioRemainder = null;
+                                        } else {
+                                            bytes = newBytes;
+                                        }
 
-    // 💡修正部分：端数バイトが来てもエラーで落ちず、安全に音声を復元する
-    const pcmLength = Math.floor(bytes.length / 2);
-    const float32Data = new Float32Array(pcmLength);
-    for (let i = 0; i < pcmLength; i++) {
-        // 16bitデータに手動で結合
-        let pcm = bytes[i * 2] | (bytes[i * 2 + 1] << 8);
-        if (pcm > 32767) pcm -= 65536; // 負の数の処理
-        // AudioContext用のFloat32（-1.0〜1.0）に変換
-        float32Data[i] = pcm / 32768.0;
-    }
+                                        // 奇数バイトの場合は最後の1バイトを次回に回す
+                                        if (bytes.length % 2 !== 0) {
+                                            audioRemainder = new Uint8Array([bytes[bytes.length - 1]]);
+                                            bytes = bytes.slice(0, bytes.length - 1);
+                                        }
 
-    // Gemini Liveの音声出力は24000Hz固定です
-    const buffer = audioContext.createBuffer(1, float32Data.length, 24000);
-    buffer.copyToChannel(float32Data, 0);
+                                        const pcmLength = bytes.length / 2;
+                                        for (let i = 0; i < pcmLength; i++) {
+                                            let pcm = bytes[i * 2] | (bytes[i * 2 + 1] << 8);
+                                            if (pcm > 32767) pcm -= 65536;
+                                            pcmPlaybackBuffer.push(pcm / 32768.0); // コップに注ぐ
+                                        }
 
-    scheduleNextAudio(buffer);
-}
+                                        // 💡 コップに0.2秒分（4800サンプル）溜まったら、まとめて再生に回す
+                                        if (pcmPlaybackBuffer.length >= 4800) {
+                                            flushPlaybackBuffer();
+                                        }
+                                    }
                                 }
                             }
                         }
 
                         if (response.serverContent && response.serverContent.turnComplete) {
-                            if (currentTurnText.trim().length > 0) {
-                                addLog(`カミュ: ${currentTurnText}`, 'normal');
-                                currentTurnText = ""; 
-                            }
+                            flushPlaybackBuffer(); // 💡 最後にコップに残った音をすべて吐き出す
+                            // 邪魔な字幕表示（カミュ: 〜）は削除しました
                         }
                         
                         if (response.serverContent && response.serverContent.interrupted) {
-  　　　　　　　　　　　　　  // 予約されている音声をすべて止める
-   　　　　　　　　　　　　　 activeSources.forEach(source => {
-      　　　　　　　　　　　　　  try { source.stop(); } catch(e){}
-　　　　　　　　　　　　　    });
-　　　　　　　　　　　　　    activeSources = [];
-　　　　　　　　　　　　　    nextPlayTime = 0; // スケジュール時間をリセット
-  　　　　　　　　　　　　　  currentTurnText = ""; 
-  　　　　　　　　　　　　　  addLog('⚡ えりの割り込みを検知！カミュを黙らせたぞ。', 'sys');
-　　　　　　　　　　　　　　}
+                            activeSources.forEach(source => {
+                                try { source.stop(); } catch(e){}
+                            });
+                            activeSources = [];
+                            nextPlayTime = 0; 
+                            audioRemainder = null;   // コップの中身も捨てる
+                            pcmPlaybackBuffer = [];  // コップの中身も捨てる
+                            addLog('⚡ えりの割り込みを検知！カミュを黙らせたぞ。', 'sys');
+                        }
                     } catch (parseError) {
                         addLog(`データ解析エラー: ${parseError.message}`, 'error');
                     }
