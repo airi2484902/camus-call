@@ -178,10 +178,10 @@ function scheduleNextAudio(buffer) {
 
             try {
                 addLog('マイクと音声エンジンを起動中...', 'sys');
-                audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
+               audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 if (audioContext.state === 'suspended') await audioContext.resume();
 
-                mediaStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 24000, channelCount: 1 } });
+                mediaStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 } });
                 
                 const blob = new Blob([workletCode], { type: 'application/javascript' });
                 await audioContext.audioWorklet.addModule(URL.createObjectURL(blob));
@@ -227,15 +227,15 @@ function scheduleNextAudio(buffer) {
                     binaryString += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
                 }
                 
-                // 💡修正: エラー1007の原因だった部分を、最新の正しいフォーマット（audio）に戻しました
                 ws.send(JSON.stringify({ 
-                    realtimeInput: { 
-                        audio: { 
-                            mimeType: "audio/pcm;rate=24000", 
-                            data: btoa(binaryString) 
-                        } 
-                    } 
-                }));
+    realtimeInput: { 
+        audio: { 
+            // 💡 固定の数字をやめ、実際のブラウザの音質をGeminiに伝えます
+            mimeType: "audio/pcm;rate=" + audioContext.sampleRate, 
+            data: btoa(binaryString) 
+        } 
+    } 
+}));
             }
         };
                 
@@ -244,10 +244,9 @@ function scheduleNextAudio(buffer) {
                         let responseText = event.data instanceof Blob ? await event.data.text() : event.data;
                         const response = JSON.parse(responseText);
                         
-                        
                         if (response.error) {
-                            addLog(`Googleからエラー応答: ${response.error.message}`, 'error');
-                            cleanup("設定エラーだ。", '#e74c3c');
+                            addLog(`Googleからエラー: ${response.error.message}`, 'error');
+                            cleanup("通信エラーだ。", '#e74c3c');
                             return;
                         }
                         
@@ -261,11 +260,14 @@ function scheduleNextAudio(buffer) {
                         }
                         
                         if (response.serverContent) {
-                            // 💡 裏でこっそり履歴だけ保存（画面には出さない）
+                            // 💡裏でこっそり履歴を保存（画面には出さない）
                             if (response.serverContent.outputTranscription && response.serverContent.outputTranscription.text) {
                                 fullTranscript += response.serverContent.outputTranscription.text; 
                             } 
-                            else if (response.serverContent.modelTurn && response.serverContent.modelTurn.parts) {
+                            
+                            // 🚨🚨🚨 ここが最大の原因でした！ else を消して if にしました 🚨🚨🚨
+                            // これで、テキストと一緒に届いた音声も絶対に捨てられません！
+                            if (response.serverContent.modelTurn && response.serverContent.modelTurn.parts) {
                                 for (let part of response.serverContent.modelTurn.parts) {
                                     if (part.text) {
                                         fullTranscript += part.text;
@@ -279,7 +281,7 @@ function scheduleNextAudio(buffer) {
                                             newBytes[i] = binaryString.charCodeAt(i);
                                         }
                                         
-                                        // 💡 データが途切れても安全に繋ぐ処理
+                                        // データが途切れても安全に繋ぐ処理
                                         let bytes;
                                         if (audioRemainder) {
                                             bytes = new Uint8Array(audioRemainder.length + newBytes.length);
@@ -303,7 +305,7 @@ function scheduleNextAudio(buffer) {
                                             pcmPlaybackBuffer.push(pcm / 32768.0); // コップに注ぐ
                                         }
 
-                                        // 💡 コップに0.2秒分（4800サンプル）溜まったら、まとめて再生に回す
+                                        // コップに0.2秒分溜まったらなめらかに再生
                                         if (pcmPlaybackBuffer.length >= 4800) {
                                             flushPlaybackBuffer();
                                         }
@@ -313,8 +315,7 @@ function scheduleNextAudio(buffer) {
                         }
 
                         if (response.serverContent && response.serverContent.turnComplete) {
-                            flushPlaybackBuffer(); // 💡 最後にコップに残った音をすべて吐き出す
-                            // 邪魔な字幕表示（カミュ: 〜）は削除しました
+                            flushPlaybackBuffer(); 
                         }
                         
                         if (response.serverContent && response.serverContent.interrupted) {
@@ -323,8 +324,8 @@ function scheduleNextAudio(buffer) {
                             });
                             activeSources = [];
                             nextPlayTime = 0; 
-                            audioRemainder = null;   // コップの中身も捨てる
-                            pcmPlaybackBuffer = [];  // コップの中身も捨てる
+                            audioRemainder = null;   
+                            pcmPlaybackBuffer = [];  
                             addLog('⚡ えりの割り込みを検知！カミュを黙らせたぞ。', 'sys');
                         }
                     } catch (parseError) {
