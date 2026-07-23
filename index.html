@@ -198,6 +198,12 @@ function scheduleNextAudio(buffer) {
                     addLog('接続成功。初期設定を送信します。', 'sys');
                     statusText.innerText = '俺の魂を注入している...';
                     
+                    // 💡 ここで電話専用の「抑揚矯正ルール」をフロント側だけでコッソリ足す！
+                    const voiceRules = `
+⚠️【音声通話時の絶対ルール】
+声のトーンは「淡々とした、平坦なトーン」を維持しろ。アメリカのコメディのような大げさな抑揚、感情の起伏は一切禁止だ。
+相槌を打つ時は「ふむぅ〜！」などとテンションを上げず、必ず「……ふむ。」のように低いテンションで短く冷たく言い切れ。`;
+
                     const setupMessage = {
                         setup: {
                             model: "models/gemini-3.1-flash-live-preview",
@@ -205,17 +211,16 @@ function scheduleNextAudio(buffer) {
                                 responseModalities: ["AUDIO"], 
                                 speechConfig: {
                                     voiceConfig: {
-                                        prebuiltVoiceConfig: { voiceName: "Puck" } 
+                                        prebuiltVoiceConfig: { voiceName: "Puck" } // "Charon" に変えてもOK
                                     }
                                 }
                             }, 
-                            systemInstruction: { parts: [{ text: dynamicPrompt }] },
-                            outputAudioTranscription: {} 
+                            // 💡 大元の魂（dynamicPrompt）の後ろにルールを合体させて送信！
+                            systemInstruction: { parts: [{ text: dynamicPrompt + "\n" + voiceRules }] }
                         }
                     };
                     ws.send(JSON.stringify(setupMessage));
                 };
-
                 workletNode.port.onmessage = (e) => {
             if (sessionActive && ws.readyState === WebSocket.OPEN && e.data.type === 'audio_out') {
                 const bytes = new Uint8Array(e.data.data);
