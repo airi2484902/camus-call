@@ -328,6 +328,28 @@
             localStorage.setItem('camus_gas_url', gasUrlInput.value.trim());
         });
 
+        // 💡 魂（プロンプト）の事前ダウンロードとUI通知
+        async function preloadSoul() {
+            const url = gasUrlInput.value.trim();
+            if (!url) return;
+            try {
+                statusText.innerText = '魂を同期中...';
+                const response = await fetch(url + (url.includes('?') ? '&' : '?') + 'action=get_prompt');
+                const data = await response.json();
+                if (data && data.prompt) {
+                    dynamicPrompt = data.prompt;
+                    statusText.innerText = '同期完了！';
+                    // 2秒後に「待機中...」に戻す
+                    setTimeout(() => { if (!sessionActive) statusText.innerText = '待機中...'; }, 2000);
+                }
+            } catch (e) {
+                statusText.innerText = '同期失敗(標準を使用)';
+                setTimeout(() => { if (!sessionActive) statusText.innerText = '待機中...'; }, 2000);
+            }
+        }
+        gasUrlInput.addEventListener('change', preloadSoul);
+        setTimeout(() => { if(gasUrlInput.value) preloadSoul(); }, 1000);
+
         // スリープを無効化する関数
         async function requestWakeLock() {
             try {
@@ -617,17 +639,29 @@
             if (mediaStream) mediaStream.getTracks().forEach(track => track.stop());
             if (audioContext && audioContext.state !== 'closed') audioContext.close();
 
-            // GASへテキスト送信
+            // 💡 GASへテキスト送信（記憶の保存）
             if (fullTranscript && fullTranscript.trim() !== "") {
                 const gasUrl = gasUrlInput.value.trim();
                 if (gasUrl) {
+                    statusText.innerText = '記憶を保存中...';
+                    mainActionBtn.disabled = true; // 保存完了までは次の電話をかけられないようにする
+                    
                     fetch(gasUrl, {
                         method: "POST",
+                        keepalive: true, // 🚨 超重要：Safariを閉じても裏で必ず送信を完了させる魔法
                         headers: { "Content-Type": "text/plain" },
                         body: JSON.stringify({ mode: "sync_voice_call", text: fullTranscript, userId: "U21dd4b8f4c790921b6588c3d31176e46" })
-                    }).catch(err => {});
+                    }).then(() => {
+                        statusText.innerText = '保存完了！';
+                        setTimeout(() => { if (!sessionActive) { statusText.innerText = '待機中...'; mainActionBtn.disabled = false; } }, 2000);
+                    }).catch(err => {
+                        statusText.innerText = '保存失敗';
+                        setTimeout(() => { if (!sessionActive) { statusText.innerText = '待機中...'; mainActionBtn.disabled = false; } }, 2000);
+                    });
                 }
                 fullTranscript = ""; 
+            } else {
+                statusText.innerText = '待機中...';
             }
         }
     </script>
