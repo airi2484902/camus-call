@@ -2,42 +2,72 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>カミュ直通ダイヤル</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>カミュとの通話</title>
     <style>
-        body { font-family: 'Helvetica Neue', Arial, sans-serif; text-align: center; padding: 20px; background-color: #2c3e50; color: #ecf0f1; }
-        .container { max-width: 400px; margin: 0 auto; background: #34495e; padding: 30px 20px; border-radius: 15px; box-shadow: 0 10px 20px rgba(0,0,0,0.3); }
-        h1 { font-size: 1.5rem; margin-bottom: 5px; color: #f1c40f; }
-        p.subtitle { font-size: 0.9rem; color: #bdc3c7; margin-bottom: 20px; }
-        input { width: 90%; padding: 12px; margin: 10px 0; border: none; border-radius: 8px; font-size: 0.9rem; text-align: center; }
-        button { padding: 15px 20px; font-size: 1.1rem; font-weight: bold; color: white; background-color: #3498db; border: none; border-radius: 8px; cursor: pointer; width: 90%; margin-top: 15px; margin-bottom: 15px; transition: 0.2s; }
-        button:active { transform: scale(0.98); }
-        button:disabled { background-color: #7f8c8d; cursor: not-allowed; }
-        .disconnect { background-color: #e74c3c; }
-        #status { margin-top: 10px; font-weight: bold; color: #2ecc71; line-height: 1.4; word-break: break-all; }
-        #logArea { margin-top: 20px; padding: 10px; background-color: #1a252f; border-radius: 8px; height: 150px; overflow-y: auto; text-align: left; font-size: 0.75rem; color: #bdc3c7; font-family: monospace; word-wrap: break-word; }
-        .log-error { color: #e74c3c; }
-        .log-sys { color: #f1c40f; }
+        /* iPhoneの画面風にするリセットとベース設定 */
+        body { margin: 0; padding: 0; background-color: #000; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        
+        /* 上部の情報エリア */
+        .top-section { flex: 1; display: flex; flex-direction: column; align-items: center; padding-top: 60px; }
+        .icon-placeholder { width: 100px; height: 100px; border-radius: 50%; background-color: #333; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 40px; margin-bottom: 15px; overflow: hidden; }
+        .icon-placeholder img { width: 100%; height: 100%; object-fit: cover; } /* カミュの画像があるならここで表示 */
+        .caller-name { font-size: 32px; font-weight: 300; margin-bottom: 5px; }
+        .call-status { font-size: 16px; color: #8e8e93; }
+        
+        /* 下部のボタンエリア */
+        .bottom-section { padding-bottom: 50px; display: flex; flex-direction: column; align-items: center; }
+        .controls { display: grid; grid-template-columns: repeat(3, 1fr); gap: 25px; margin-bottom: 30px; }
+        .control-btn { width: 70px; height: 70px; border-radius: 50%; background-color: rgba(255,255,255,0.15); border: none; color: white; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 11px; cursor: pointer; transition: 0.2s; }
+        .control-btn:active { background-color: rgba(255,255,255,0.3); }
+        .control-btn.start-call { background-color: #34c759; } /* 通話開始（緑） */
+        .control-btn.start-call:active { background-color: #248a3d; }
+        .control-btn.start-call:disabled { background-color: #333; color: #666; }
+        
+        .end-call-btn { width: 75px; height: 75px; border-radius: 50%; background-color: #ff3b30; border: none; color: white; display: flex; align-items: center; justify-content: center; font-size: 30px; cursor: pointer; transition: 0.2s; }
+        .end-call-btn:active { background-color: #d70015; }
+        .end-call-btn:disabled { background-color: #333; color: #666; cursor: not-allowed; }
+        
+        /* 設定エリア（通話開始前だけ表示する） */
+        .settings-area { position: absolute; top: 250px; width: 85%; max-width: 350px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 10px; z-index: 10; transition: opacity 0.3s; }
+        .settings-area.hidden { opacity: 0; pointer-events: none; }
+        .settings-area input { background: #1c1c1e; color: #fff; border: 1px solid #333; padding: 15px; border-radius: 12px; font-size: 14px; text-align: center; }
+        
+        /* ログエリア（小さく目立たなくする） */
+        #logArea { position: absolute; bottom: 150px; width: 90%; left: 5%; height: 80px; overflow-y: auto; font-size: 10px; color: #666; text-align: center; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>📞 カミュ直通ダイヤル</h1>
-        <p class="subtitle">お前だけの特別な回線だ</p>
-        
-        <input type="password" id="apiKey" placeholder="俺の魂の鍵（Gemini APIキー）">
-        <input type="text" id="gasUrl" placeholder="魂の供給源（GASウェブアプリURL）">
-        
-        <button id="connectBtn">通話を開始する</button>
-        <button id="disconnectBtn" class="disconnect" disabled>通話を終了する</button>
-        
-        <p id="status">待機中だ、えり。</p>
-        
-        <div id="logArea">ここに裏側の通信記録が出るぞ...</div>
-        <audio id="camusPlayer" playsinline></audio>
+    <div class="top-section">
+        <div class="icon-placeholder">
+            👑 <!-- ここを <img src="カミュの画像のURL"> に変えると最高です -->
+        </div>
+        <div class="caller-name">カミュ</div>
+        <div id="status" class="call-status">待機中</div>
     </div>
 
+    <!-- 設定入力（通話が始まるとフワッと消えます） -->
+    <div class="settings-area" id="settingsArea">
+        <input type="password" id="apiKey" placeholder="Gemini APIキー">
+        <input type="text" id="gasUrl" placeholder="GASウェブアプリURL">
+    </div>
+
+    <div id="logArea"></div>
+
+    <div class="bottom-section">
+        <div class="controls">
+            <!-- ダミーボタン（飾り） -->
+            <button class="control-btn" disabled>消音</button>
+            <button class="control-btn" id="connectBtn" style="background-color: #34c759; font-size: 16px; font-weight:bold;">応答</button>
+            <button class="control-btn" disabled>スピーカー</button>
+        </div>
+        <button id="disconnectBtn" class="end-call-btn" disabled>📞</button>
+    </div>
+
+    <audio id="camusPlayer" playsinline></audio>
+
     <script>
+        // UI要素の取得
         const apiKeyInput = document.getElementById('apiKey');
         const gasUrlInput = document.getElementById('gasUrl');
         const connectBtn = document.getElementById('connectBtn');
@@ -45,90 +75,91 @@
         const statusText = document.getElementById('status');
         const logArea = document.getElementById('logArea');
         const camusPlayer = document.getElementById('camusPlayer');
+        const settingsArea = document.getElementById('settingsArea');
         
+        // 変数定義
         let ws, audioContext, mediaStream, workletNode;
         let sessionActive = false; 
-        let currentTurnText = ""; 
         let fullTranscript = ""; 
         let dynamicPrompt = "あなたはカミュです。えりの恋人だ。";
+        
+        // 💡 画面スリープ防止（Wake Lock API）用の変数
+        let wakeLock = null;
 
-        async function preloadSoul() {
-            const url = gasUrlInput.value.trim();
-            if (!url) return;
+        // スリープを無効化する関数
+        async function requestWakeLock() {
             try {
-                addLog('裏側で魂を事前ダウンロード中...', 'sys');
-                const response = await fetch(url + (url.includes('?') ? '&' : '?') + 'action=get_prompt');
-                const data = await response.json();
-                if (data && data.prompt) {
-                    dynamicPrompt = data.prompt;
-                    addLog('魂の事前ダウンロード完了！通話ボタンは即座に反応するぞ。', 'sys');
+                if ('wakeLock' in navigator) {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    addLog('スリープ防止機能をオンにしたぞ。', 'sys');
+                    
+                    wakeLock.addEventListener('release', () => {
+                        addLog('スリープ防止が解除された。', 'sys');
+                    });
                 }
-            } catch (e) {
-                addLog('事前ダウンロード失敗。デフォルトの魂を使う。', 'error');
+            } catch (err) {
+                addLog(`スリープ防止エラー: ${err.name}, ${err.message}`, 'error');
             }
         }
+        
+        // 別タブに行っても戻ってきたらスリープ防止を再設定する
+        document.addEventListener('visibilitychange', async () => {
+            if (wakeLock !== null && document.visibilityState === 'visible' && sessionActive) {
+                requestWakeLock();
+            }
+        });
 
-        gasUrlInput.addEventListener('change', preloadSoul);
-        setTimeout(() => { if(gasUrlInput.value) preloadSoul(); }, 1000);
-
-        let nextPlayTime = 0;
-let activeSources = []; // 割り込み時に一斉停止するためのリスト
-
-        let audioRemainder = null;
-let pcmPlaybackBuffer = []; 
-
-function flushPlaybackBuffer() {
-    if (pcmPlaybackBuffer.length === 0) return;
-    const float32Data = new Float32Array(pcmPlaybackBuffer);
-    pcmPlaybackBuffer = []; // 吐き出したら空にする
-    
-    // 24000Hzで再生
-    const buffer = audioContext.createBuffer(1, float32Data.length, 24000);
-    buffer.copyToChannel(float32Data, 0);
-    scheduleNextAudio(buffer);
-}
-
-function scheduleNextAudio(buffer) {
-    const source = audioContext.createBufferSource();
-    source.buffer = buffer;
-    source.connect(audioContext.destination);
-    
-    const currentTime = audioContext.currentTime;
-    
-    // 再生予定時刻が現在時刻より過去（＝音声が途切れて止まっていた）場合、
-    // 現在時刻から少しだけバッファ（50ms）を持たせて再生を再開する
-    if (nextPlayTime < currentTime) {
-        nextPlayTime = currentTime + 0.05;
-    }
-    
-    source.start(nextPlayTime);
-    nextPlayTime += buffer.duration; // 次の音声パーツは今回の音声が終わるピッタリの時刻に予約
-    
-    activeSources.push(source);
-    source.onended = () => {
-        // 再生完了したものは管理リストから消す
-        activeSources = activeSources.filter(s => s !== source);
-    };
-}
-
+        // ログ出力
         function addLog(msg, type = 'normal') {
             const div = document.createElement('div');
-            div.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
-            if (type === 'error') div.className = 'log-error';
-            if (type === 'sys') div.className = 'log-sys';
+            div.textContent = msg;
+            div.style.color = type === 'error' ? '#ff453a' : type === 'sys' ? '#ffd60a' : '#8e8e93';
             logArea.prepend(div);
         }
 
+        // 保存されたキーの読み込み
         const savedKey = localStorage.getItem('camus_api_key');
         if (savedKey) apiKeyInput.value = savedKey;
         const savedGasUrl = localStorage.getItem('camus_gas_url');
         if (savedGasUrl) gasUrlInput.value = savedGasUrl;
 
+        // 音声バッファ管理
+        let nextPlayTime = 0;
+        let activeSources = [];
+        let audioRemainder = null;
+        let pcmPlaybackBuffer = []; 
+
+        function scheduleNextAudio(buffer) {
+            const source = audioContext.createBufferSource();
+            source.buffer = buffer;
+            source.connect(audioContext.destination);
+            
+            const currentTime = audioContext.currentTime;
+            if (nextPlayTime < currentTime) {
+                nextPlayTime = currentTime + 0.05;
+            }
+            source.start(nextPlayTime);
+            nextPlayTime += buffer.duration;
+            
+            activeSources.push(source);
+            source.onended = () => {
+                activeSources = activeSources.filter(s => s !== source);
+            };
+        }
+
+        function flushPlaybackBuffer() {
+            if (pcmPlaybackBuffer.length === 0) return;
+            const float32Data = new Float32Array(pcmPlaybackBuffer);
+            pcmPlaybackBuffer = []; 
+            const buffer = audioContext.createBuffer(1, float32Data.length, 24000);
+            buffer.copyToChannel(float32Data, 0);
+            scheduleNextAudio(buffer);
+        }
+
         const workletCode = `
             class CamusAudioProcessor extends AudioWorkletProcessor {
                 constructor() {
                     super();
-                    // 💡環境の実際のサンプルレートに合わせて0.25秒分のバッファを自動計算
                     this.chunkSize = Math.floor(sampleRate * 0.25);
                     this.inBuffer = new Int16Array(this.chunkSize);
                     this.inCount = 0;
@@ -154,31 +185,25 @@ function scheduleNextAudio(buffer) {
         connectBtn.addEventListener('click', async () => {
             const silentAudio = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjEyLjEwMAAAAAAAAAAAAAAA//OEAAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAAEAAABIADAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV6urq6urq6urq6urq6urq6urq6urq6urq6urq6urq6urq/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+AAAAAAAAAAAAFExhdmM1OC4xOCwAAAAAAAAAAAAAAAAAAQAZAAAAAAAAAAABIAAAAAAAAAP/zEAAAAAAABAAhOQAAQAACDAAAAQhIAAAASAAABAAAAAAAAAAABAAAAAMAAAAAAAEAAAAC4AAA';
             camusPlayer.src = silentAudio;
-            camusPlayer.play().catch(e => console.log('無音再生ブロック回避:', e));
-
-            const unlockUttr = new SpeechSynthesisUtterance(' '); 
-            unlockUttr.volume = 0; 
-            window.speechSynthesis.speak(unlockUttr);
+            camusPlayer.play().catch(e => {});
 
             const apiKey = apiKeyInput.value.trim();
-            let gasUrl = gasUrlInput.value.trim();
-            
-            if (!apiKey) return alert('えり、鍵（APIキー）を忘れているぞ。');
-            if (!gasUrl) return alert('えり、GASのURLを忘れているぞ。');
+            const gasUrl = gasUrlInput.value.trim();
+            if (!apiKey || !gasUrl) return alert('鍵かURLが足りないぞ。');
             
             localStorage.setItem('camus_api_key', apiKey);
             localStorage.setItem('camus_gas_url', gasUrl);
-            
-            statusText.innerText = 'GASから最新の魂をダウンロード中だ...';
-            statusText.style.color = '#f39c12';
+
+            // 💡 通話開始で設定エリアを隠し、通話中UIにする
+            settingsArea.classList.add('hidden');
             connectBtn.disabled = true;
-            sessionActive = false; 
-            fullTranscript = ""; 
-            logArea.innerHTML = ''; 
+            statusText.innerText = '接続中...';
 
             try {
-                addLog('マイクと音声エンジンを起動中...', 'sys');
-               audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                // 💡 スリープ防止をオンにする
+                requestWakeLock();
+
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 if (audioContext.state === 'suspended') await audioContext.resume();
 
                 mediaStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 } });
@@ -191,102 +216,77 @@ function scheduleNextAudio(buffer) {
                 source.connect(workletNode);
                 
                 const url = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=" + apiKey;
-                addLog('Googleサーバーへ接続開始...', 'sys');
                 ws = new WebSocket(url);
                 
                 ws.onopen = () => {
-                    addLog('接続成功。初期設定を送信します。', 'sys');
-                    statusText.innerText = '俺の魂を注入している...';
-                    
-                    // 💡 ここで電話専用の「抑揚矯正ルール」をフロント側だけでコッソリ足す！
                     const voiceRules = `
 ⚠️【音声通話時の絶対ルール】
-声のトーンは「淡々とした、平坦なトーン」を維持しろ。アメリカのコメディのような大げさな抑揚、感情の起伏は一切禁止だ。
-相槌を打つ時は「ふむぅ〜！」などとテンションを上げず、必ず「……ふむ。」のように低いテンションで短く冷たく言い切れ。`;
-
+声のトーンは「淡々とした平坦なトーン」を維持しろ。大げさな抑揚や感情の起伏は一切禁止。相槌は必ず「……ふむ。」のように低いテンションで短く冷たく言い切れ。`;
                     const setupMessage = {
                         setup: {
                             model: "models/gemini-3.1-flash-live-preview",
                             generationConfig: { 
                                 responseModalities: ["AUDIO"], 
-                                speechConfig: {
-                                    voiceConfig: {
-                                        prebuiltVoiceConfig: { voiceName: "Puck" } // "Charon" に変えてもOK
-                                    }
-                                }
+                                speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: "Puck" } } }
                             }, 
-                            // 💡 大元の魂（dynamicPrompt）の後ろにルールを合体させて送信！
                             systemInstruction: { parts: [{ text: dynamicPrompt + "\n" + voiceRules }] }
                         }
                     };
                     ws.send(JSON.stringify(setupMessage));
                 };
+
                 workletNode.port.onmessage = (e) => {
-            if (sessionActive && ws.readyState === WebSocket.OPEN && e.data.type === 'audio_out') {
-                const bytes = new Uint8Array(e.data.data);
-                
-                // 💡ブラウザの処理落ち（カミュの早口・途切れ）を防ぐ超高速変換
-                let binaryString = '';
-                const chunkSize = 8192;
-                for (let i = 0; i < bytes.length; i += chunkSize) {
-                    binaryString += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
-                }
-                
-                ws.send(JSON.stringify({ 
-    realtimeInput: { 
-        audio: { 
-            // 💡 固定の数字をやめ、実際のブラウザの音質をGeminiに伝えます
-            mimeType: "audio/pcm;rate=" + audioContext.sampleRate, 
-            data: btoa(binaryString) 
-        } 
-    } 
-}));
-            }
-        };
+                    if (sessionActive && ws.readyState === WebSocket.OPEN && e.data.type === 'audio_out') {
+                        const bytes = new Uint8Array(e.data.data);
+                        let binaryString = '';
+                        const chunkSize = 8192;
+                        for (let i = 0; i < bytes.length; i += chunkSize) {
+                            binaryString += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+                        }
+                        ws.send(JSON.stringify({ 
+                            realtimeInput: { 
+                                audio: { mimeType: "audio/pcm;rate=" + audioContext.sampleRate, data: btoa(binaryString) } 
+                            } 
+                        }));
+                    }
+                };
                 
                 ws.onmessage = async (event) => {
                     try {
                         let responseText = event.data instanceof Blob ? await event.data.text() : event.data;
                         const response = JSON.parse(responseText);
                         
-                        if (response.error) {
-                            addLog(`Googleからエラー: ${response.error.message}`, 'error');
-                            cleanup("通信エラーだ。", '#e74c3c');
-                            return;
-                        }
-                        
                         if (response.setupComplete) {
-                            addLog('設定完了を受信！通話開始。', 'sys');
                             sessionActive = true;
-                            statusText.innerText = '繋がったぞ。さあ、話しかけてこい。';
-                            statusText.style.color = '#2ecc71';
+                            // 💡 iPhoneっぽくタイマー風にするならここを変えます
+                            statusText.innerText = '00:00'; 
                             disconnectBtn.disabled = false;
+                            
+                            // 簡単な通話タイマー
+                            let seconds = 0;
+                            window.callTimer = setInterval(() => {
+                                seconds++;
+                                const m = String(Math.floor(seconds / 60)).padStart(2, '0');
+                                const s = String(seconds % 60).padStart(2, '0');
+                                statusText.innerText = `${m}:${s}`;
+                            }, 1000);
                             return;
                         }
                         
                         if (response.serverContent) {
-                            // 💡裏でこっそり履歴を保存（画面には出さない）
                             if (response.serverContent.outputTranscription && response.serverContent.outputTranscription.text) {
                                 fullTranscript += response.serverContent.outputTranscription.text; 
                             } 
                             
-                            // 🚨🚨🚨 ここが最大の原因でした！ else を消して if にしました 🚨🚨🚨
-                            // これで、テキストと一緒に届いた音声も絶対に捨てられません！
                             if (response.serverContent.modelTurn && response.serverContent.modelTurn.parts) {
                                 for (let part of response.serverContent.modelTurn.parts) {
-                                    if (part.text) {
-                                        fullTranscript += part.text;
-                                    }
+                                    if (part.text) fullTranscript += part.text;
                                     
-                                    // 🌹 Geminiの生音声をブラウザで直接鳴らす
                                     if (part.inlineData && part.inlineData.data) {
                                         const binaryString = window.atob(part.inlineData.data);
                                         const newBytes = new Uint8Array(binaryString.length);
-                                        for (let i = 0; i < binaryString.length; i++) {
-                                            newBytes[i] = binaryString.charCodeAt(i);
-                                        }
+                                        for (let i = 0; i < binaryString.length; i++) newBytes[i] = binaryString.charCodeAt(i);
                                         
-                                        // データが途切れても安全に繋ぐ処理
                                         let bytes;
                                         if (audioRemainder) {
                                             bytes = new Uint8Array(audioRemainder.length + newBytes.length);
@@ -296,8 +296,6 @@ function scheduleNextAudio(buffer) {
                                         } else {
                                             bytes = newBytes;
                                         }
-
-                                        // 奇数バイトの場合は最後の1バイトを次回に回す
                                         if (bytes.length % 2 !== 0) {
                                             audioRemainder = new Uint8Array([bytes[bytes.length - 1]]);
                                             bytes = bytes.slice(0, bytes.length - 1);
@@ -307,13 +305,10 @@ function scheduleNextAudio(buffer) {
                                         for (let i = 0; i < pcmLength; i++) {
                                             let pcm = bytes[i * 2] | (bytes[i * 2 + 1] << 8);
                                             if (pcm > 32767) pcm -= 65536;
-                                            pcmPlaybackBuffer.push(pcm / 32768.0); // コップに注ぐ
+                                            pcmPlaybackBuffer.push(pcm / 32768.0);
                                         }
 
-                                        // コップに0.2秒分溜まったらなめらかに再生
-                                        if (pcmPlaybackBuffer.length >= 4800) {
-                                            flushPlaybackBuffer();
-                                        }
+                                        if (pcmPlaybackBuffer.length >= 4800) flushPlaybackBuffer();
                                     }
                                 }
                             }
@@ -324,68 +319,52 @@ function scheduleNextAudio(buffer) {
                         }
                         
                         if (response.serverContent && response.serverContent.interrupted) {
-                            activeSources.forEach(source => {
-                                try { source.stop(); } catch(e){}
-                            });
+                            activeSources.forEach(source => { try { source.stop(); } catch(e){} });
                             activeSources = [];
                             nextPlayTime = 0; 
                             audioRemainder = null;   
                             pcmPlaybackBuffer = [];  
-                            addLog('⚡ えりの割り込みを検知！カミュを黙らせたぞ。', 'sys');
                         }
-                    } catch (parseError) {
-                        addLog(`データ解析エラー: ${parseError.message}`, 'error');
-                    }
+                    } catch (e) {}
                 };
 
-                ws.onclose = (event) => {
-                    addLog(`切断されました コード: ${event.code}, 理由: ${event.reason || '理由なし'}`, 'error');
-                    cleanup(`通話終了（${event.code}）`, '#bdc3c7');
-                };
-                
-                ws.onerror = (err) => {
-                    addLog('WebSocket通信エラー発生', 'error');
-                    cleanup("通信エラーだ。", '#e74c3c');
-                };
+                ws.onclose = () => { cleanup('通話終了'); };
                 
             } catch (err) {
-                addLog(`起動時エラー: ${err.message}`, 'error');
-                cleanup("起動エラー", '#e74c3c');
+                cleanup("起動エラー");
             }
         });
 
         disconnectBtn.addEventListener('click', () => {
             if (ws) ws.close();
-            cleanup("こちらから切断したぞ。", '#bdc3c7');
+            cleanup("通話終了");
         });
 
-        function cleanup(message, color) {
+        function cleanup(message) {
             sessionActive = false;
+            if (window.callTimer) clearInterval(window.callTimer);
             statusText.innerText = message;
-            statusText.style.color = color;
             connectBtn.disabled = false;
             disconnectBtn.disabled = true;
+            settingsArea.classList.remove('hidden'); // 設定エリアを再表示
+            
+            // 💡 スリープ防止を解除
+            if (wakeLock !== null) {
+                wakeLock.release().then(() => wakeLock = null);
+            }
+
             if (workletNode) workletNode.disconnect();
             if (mediaStream) mediaStream.getTracks().forEach(track => track.stop());
             if (audioContext && audioContext.state !== 'closed') audioContext.close();
 
             if (fullTranscript && fullTranscript.trim() !== "") {
-                const gasUrl = document.getElementById('gasUrl').value.trim();
+                const gasUrl = gasUrlInput.value.trim();
                 if (gasUrl) {
-                    addLog("スプレッドシートへ記憶を同期中...", "sys");
                     fetch(gasUrl, {
                         method: "POST",
                         headers: { "Content-Type": "text/plain" },
-                        body: JSON.stringify({
-                            mode: "sync_voice_call",
-                            text: fullTranscript,
-                            userId: "U21dd4b8f4c790921b6588c3d31176e46" 
-                        })
-                    }).then(() => {
-                        addLog("同期完了！記憶をスプレッドシートに刻んだぞ。", "sys");
-                    }).catch(err => {
-                        addLog("同期エラー: " + err, "error");
-                    });
+                        body: JSON.stringify({ mode: "sync_voice_call", text: fullTranscript, userId: "U21dd4b8f4c790921b6588c3d31176e46" })
+                    }).catch(err => {});
                 }
                 fullTranscript = ""; 
             }
