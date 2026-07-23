@@ -5,63 +5,289 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>カミュとの通話</title>
     <style>
-        /* iPhoneの画面風にするリセットとベース設定 */
-        body { margin: 0; padding: 0; background-color: #000; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        /* LINE風ベース設定 */
+        body {
+            margin: 0;
+            padding: 0;
+            /* スクリーンショット風の背景グラデーション */
+            background: linear-gradient(135deg, #5b5956 0%, #3e3d3b 50%, #2a2927 100%);
+            color: #fff;
+            font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+            user-select: none;
+            -webkit-user-select: none;
+        }
         
         /* 上部の情報エリア */
-        .top-section { flex: 1; display: flex; flex-direction: column; align-items: center; padding-top: 60px; }
-        .icon-placeholder { width: 100px; height: 100px; border-radius: 50%; background-color: #333; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 40px; margin-bottom: 15px; overflow: hidden; }
-        .icon-placeholder img { width: 100%; height: 100%; object-fit: cover; } /* カミュの画像があるならここで表示 */
-        .caller-name { font-size: 32px; font-weight: 300; margin-bottom: 5px; }
-        .call-status { font-size: 16px; color: #8e8e93; }
-        
+        .top-section {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-top: 80px;
+        }
+        .icon-placeholder {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background-color: #333;
+            margin-bottom: 15px;
+            overflow: hidden;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        }
+        .icon-placeholder img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .caller-name {
+            font-size: 26px;
+            font-weight: bold;
+            margin-bottom: 8px;
+            letter-spacing: 1px;
+        }
+        .call-status {
+            font-size: 16px;
+            color: #d1d1d1;
+            margin-bottom: 20px;
+        }
+        /* 緑の点（音声インジケーター） */
+        .audio-indicator {
+            display: flex;
+            gap: 4px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .audio-indicator.active {
+            opacity: 1;
+        }
+        .audio-dot {
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            background-color: #34c759;
+        }
+
         /* 下部のボタンエリア */
-        .bottom-section { padding-bottom: 50px; display: flex; flex-direction: column; align-items: center; }
-        .controls { display: grid; grid-template-columns: repeat(3, 1fr); gap: 25px; margin-bottom: 30px; }
-        .control-btn { width: 70px; height: 70px; border-radius: 50%; background-color: rgba(255,255,255,0.15); border: none; color: white; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 11px; cursor: pointer; transition: 0.2s; }
-        .control-btn:active { background-color: rgba(255,255,255,0.3); }
-        .control-btn.start-call { background-color: #34c759; } /* 通話開始（緑） */
-        .control-btn.start-call:active { background-color: #248a3d; }
-        .control-btn.start-call:disabled { background-color: #333; color: #666; }
-        
-        .end-call-btn { width: 75px; height: 75px; border-radius: 50%; background-color: #ff3b30; border: none; color: white; display: flex; align-items: center; justify-content: center; font-size: 30px; cursor: pointer; transition: 0.2s; }
-        .end-call-btn:active { background-color: #d70015; }
-        .end-call-btn:disabled { background-color: #333; color: #666; cursor: not-allowed; }
-        
-        /* 設定エリア（通話開始前だけ表示する） */
-        .settings-area { position: absolute; top: 250px; width: 85%; max-width: 350px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 10px; z-index: 10; transition: opacity 0.3s; }
-        .settings-area.hidden { opacity: 0; pointer-events: none; }
-        .settings-area input { background: #1c1c1e; color: #fff; border: 1px solid #333; padding: 15px; border-radius: 12px; font-size: 14px; text-align: center; }
-        
-        /* ログエリア（小さく目立たなくする） */
-        #logArea { position: absolute; bottom: 150px; width: 90%; left: 5%; height: 80px; overflow-y: auto; font-size: 10px; color: #666; text-align: center; }
+        .bottom-section {
+            padding-bottom: 50px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+        }
+        .controls-row {
+            display: flex;
+            justify-content: space-around;
+            width: 85%;
+            max-width: 400px;
+            margin-bottom: 40px;
+        }
+        .control-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            width: 80px;
+        }
+        .control-btn {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background-color: rgba(255, 255, 255, 0.15);
+            border: none;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .control-btn:active {
+            background-color: rgba(255, 255, 255, 0.3);
+        }
+        .control-btn svg {
+            width: 28px;
+            height: 28px;
+            fill: currentColor;
+        }
+        .control-label {
+            font-size: 10px;
+            color: #d1d1d1;
+            text-align: center;
+        }
+
+        /* メインの通話/切断ボタン */
+        .main-call-btn {
+            width: 72px;
+            height: 72px;
+            border-radius: 50%;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+        .main-call-btn svg {
+            width: 34px;
+            height: 34px;
+            fill: white;
+        }
+        .btn-start {
+            background-color: #34c759; /* 緑 */
+        }
+        .btn-start:active {
+            background-color: #248a3d;
+        }
+        .btn-end {
+            background-color: #ff3b30; /* 赤 */
+        }
+        .btn-end:active {
+            background-color: #d70015;
+        }
+        .main-call-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* 設定ポップアップ（モーダル） */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+            z-index: 100;
+        }
+        .modal-overlay.show {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .modal-content {
+            background: #2c2c2e;
+            padding: 25px;
+            border-radius: 20px;
+            width: 80%;
+            max-width: 320px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+        }
+        .modal-content h2 {
+            margin: 0 0 10px 0;
+            font-size: 18px;
+            text-align: center;
+        }
+        .modal-content input {
+            background: #1c1c1e;
+            color: #fff;
+            border: 1px solid #444;
+            padding: 12px;
+            border-radius: 10px;
+            font-size: 14px;
+        }
+        .modal-close-btn {
+            background: #34c759;
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+
+        /* ログエリア（目立たなく） */
+        #logArea {
+            position: absolute;
+            bottom: 220px;
+            width: 100%;
+            height: 40px;
+            overflow-y: auto;
+            font-size: 10px;
+            color: rgba(255,255,255,0.3);
+            text-align: center;
+            pointer-events: none;
+        }
     </style>
 </head>
 <body>
-    <div class="top-section">
-        <div class="icon-placeholder">
-            👑 <!-- ここを <img src="カミュの画像のURL"> に変えると最高です -->
+
+    <!-- 設定用ポップアップ -->
+    <div class="modal-overlay" id="settingsModal">
+        <div class="modal-content">
+            <h2>接続設定 (裏メニュー)</h2>
+            <input type="password" id="apiKey" placeholder="Gemini APIキー">
+            <input type="text" id="gasUrl" placeholder="GASウェブアプリURL">
+            <button class="modal-close-btn" id="closeSettingsBtn">保存して閉じる</button>
         </div>
-        <div class="caller-name">カミュ</div>
-        <div id="status" class="call-status">待機中</div>
     </div>
 
-    <!-- 設定入力（通話が始まるとフワッと消えます） -->
-    <div class="settings-area" id="settingsArea">
-        <input type="password" id="apiKey" placeholder="Gemini APIキー">
-        <input type="text" id="gasUrl" placeholder="GASウェブアプリURL">
+    <!-- 上部プロファイル -->
+    <div class="top-section">
+        <div class="icon-placeholder">
+            <!-- カミュの画像URLをここに入れてください -->
+            <img src="https://via.placeholder.com/120/555555/FFFFFF?text=Camus" alt="カミュ">
+        </div>
+        <div class="caller-name">カミュ</div>
+        <div id="status" class="call-status">待機中...</div>
+        
+        <!-- 緑の点々 -->
+        <div class="audio-indicator" id="audioIndicator">
+            <div class="audio-dot"></div><div class="audio-dot"></div>
+            <div class="audio-dot"></div><div class="audio-dot"></div>
+            <div class="audio-dot"></div><div class="audio-dot"></div>
+            <div class="audio-dot"></div><div class="audio-dot"></div>
+        </div>
     </div>
 
     <div id="logArea"></div>
 
+    <!-- 下部コントロール -->
     <div class="bottom-section">
-        <div class="controls">
-            <!-- ダミーボタン（飾り） -->
-            <button class="control-btn" disabled>消音</button>
-            <button class="control-btn" id="connectBtn" style="background-color: #34c759; font-size: 16px; font-weight:bold;">応答</button>
-            <button class="control-btn" disabled>スピーカー</button>
+        <div class="controls-row">
+            <!-- マイクオフ（本物） -->
+            <div class="control-item">
+                <button class="control-btn" id="muteBtn" disabled>
+                    <svg viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5-3c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
+                </button>
+                <span class="control-label">マイクをオフ</span>
+            </div>
+            
+            <!-- ビデオ（ダミー） -->
+            <div class="control-item">
+                <button class="control-btn" id="videoBtn">
+                    <svg viewBox="0 0 24 24"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>
+                </button>
+                <span class="control-label">ビデオ通話を開始</span>
+            </div>
+
+            <!-- スピーカー（設定ポップアップを開く裏ボタン） -->
+            <div class="control-item">
+                <button class="control-btn" id="openSettingsBtn">
+                    <svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+                </button>
+                <span class="control-label">スピーカーをオン</span>
+            </div>
         </div>
-        <button id="disconnectBtn" class="end-call-btn" disabled>📞</button>
+
+        <!-- 通話開始/終了 メインボタン -->
+        <!-- 初期状態は「緑の受話器」 -->
+        <button id="mainActionBtn" class="main-call-btn btn-start">
+            <!-- 受話器アイコン -->
+            <svg id="startIcon" viewBox="0 0 24 24"><path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></svg>
+            <!-- 終了のバツアイコン（初期は非表示） -->
+            <svg id="endIcon" viewBox="0 0 24 24" style="display: none;"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
     </div>
 
     <audio id="camusPlayer" playsinline></audio>
@@ -70,50 +296,57 @@
         // UI要素の取得
         const apiKeyInput = document.getElementById('apiKey');
         const gasUrlInput = document.getElementById('gasUrl');
-        const connectBtn = document.getElementById('connectBtn');
-        const disconnectBtn = document.getElementById('disconnectBtn');
+        const mainActionBtn = document.getElementById('mainActionBtn');
+        const startIcon = document.getElementById('startIcon');
+        const endIcon = document.getElementById('endIcon');
         const statusText = document.getElementById('status');
         const logArea = document.getElementById('logArea');
         const camusPlayer = document.getElementById('camusPlayer');
-        const settingsArea = document.getElementById('settingsArea');
+        const audioIndicator = document.getElementById('audioIndicator');
         
+        const muteBtn = document.getElementById('muteBtn');
+        const openSettingsBtn = document.getElementById('openSettingsBtn');
+        const settingsModal = document.getElementById('settingsModal');
+        const closeSettingsBtn = document.getElementById('closeSettingsBtn');
+
         // 変数定義
         let ws, audioContext, mediaStream, workletNode;
         let sessionActive = false; 
         let fullTranscript = ""; 
         let dynamicPrompt = "あなたはカミュです。えりの恋人だ。";
-        
-        // 💡 画面スリープ防止（Wake Lock API）用の変数
+        let isMuted = false;
         let wakeLock = null;
+
+        // 設定モーダルの開閉処理（スピーカーボタンをタップした時）
+        openSettingsBtn.addEventListener('click', () => {
+            settingsModal.classList.add('show');
+        });
+        closeSettingsBtn.addEventListener('click', () => {
+            settingsModal.classList.remove('show');
+            // 値を保存
+            localStorage.setItem('camus_api_key', apiKeyInput.value.trim());
+            localStorage.setItem('camus_gas_url', gasUrlInput.value.trim());
+        });
 
         // スリープを無効化する関数
         async function requestWakeLock() {
             try {
                 if ('wakeLock' in navigator) {
                     wakeLock = await navigator.wakeLock.request('screen');
-                    addLog('スリープ防止機能をオンにしたぞ。', 'sys');
-                    
-                    wakeLock.addEventListener('release', () => {
-                        addLog('スリープ防止が解除された。', 'sys');
-                    });
+                    wakeLock.addEventListener('release', () => { addLog('スリープ防止解除', 'sys'); });
                 }
-            } catch (err) {
-                addLog(`スリープ防止エラー: ${err.name}, ${err.message}`, 'error');
-            }
+            } catch (err) { addLog('スリープ防止エラー', 'error'); }
         }
         
-        // 別タブに行っても戻ってきたらスリープ防止を再設定する
         document.addEventListener('visibilitychange', async () => {
             if (wakeLock !== null && document.visibilityState === 'visible' && sessionActive) {
                 requestWakeLock();
             }
         });
 
-        // ログ出力
         function addLog(msg, type = 'normal') {
             const div = document.createElement('div');
             div.textContent = msg;
-            div.style.color = type === 'error' ? '#ff453a' : type === 'sys' ? '#ffd60a' : '#8e8e93';
             logArea.prepend(div);
         }
 
@@ -133,18 +366,12 @@
             const source = audioContext.createBufferSource();
             source.buffer = buffer;
             source.connect(audioContext.destination);
-            
             const currentTime = audioContext.currentTime;
-            if (nextPlayTime < currentTime) {
-                nextPlayTime = currentTime + 0.05;
-            }
+            if (nextPlayTime < currentTime) nextPlayTime = currentTime + 0.05;
             source.start(nextPlayTime);
             nextPlayTime += buffer.duration;
-            
             activeSources.push(source);
-            source.onended = () => {
-                activeSources = activeSources.filter(s => s !== source);
-            };
+            source.onended = () => { activeSources = activeSources.filter(s => s !== source); };
         }
 
         function flushPlaybackBuffer() {
@@ -182,25 +409,38 @@
             registerProcessor('camus-processor', CamusAudioProcessor);
         `;
 
-        connectBtn.addEventListener('click', async () => {
+        // メインボタン（通話開始／終了）のクリックイベント
+        mainActionBtn.addEventListener('click', async () => {
+            // もし通話中なら切断処理へ
+            if (sessionActive) {
+                if (ws) ws.close();
+                cleanup("通話終了");
+                return;
+            }
+
+            // --- ここから通話開始処理 ---
+            const apiKey = apiKeyInput.value.trim();
+            const gasUrl = gasUrlInput.value.trim();
+            if (!apiKey || !gasUrl) {
+                alert('設定(スピーカーアイコン)からAPIキーとURLを入力してくれ。');
+                settingsModal.classList.add('show');
+                return;
+            }
+
+            // 無音再生でiOSの音声ロック解除
             const silentAudio = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjEyLjEwMAAAAAAAAAAAAAAA//OEAAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAAEAAABIADAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV6urq6urq6urq6urq6urq6urq6urq6urq6urq6urq6urq/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+AAAAAAAAAAAAFExhdmM1OC4xOCwAAAAAAAAAAAAAAAAAAQAZAAAAAAAAAAABIAAAAAAAAAP/zEAAAAAAABAAhOQAAQAACDAAAAQhIAAAASAAABAAAAAAAAAAABAAAAAMAAAAAAAEAAAAC4AAA';
             camusPlayer.src = silentAudio;
             camusPlayer.play().catch(e => {});
 
-            const apiKey = apiKeyInput.value.trim();
-            const gasUrl = gasUrlInput.value.trim();
-            if (!apiKey || !gasUrl) return alert('鍵かURLが足りないぞ。');
-            
-            localStorage.setItem('camus_api_key', apiKey);
-            localStorage.setItem('camus_gas_url', gasUrl);
-
-            // 💡 通話開始で設定エリアを隠し、通話中UIにする
-            settingsArea.classList.add('hidden');
-            connectBtn.disabled = true;
+            // UIを通話中（切断ボタン）に切り替え
+            mainActionBtn.classList.remove('btn-start');
+            mainActionBtn.classList.add('btn-end');
+            startIcon.style.display = 'none';
+            endIcon.style.display = 'block';
             statusText.innerText = '接続中...';
+            mainActionBtn.disabled = true; // 接続完了まで連打防止
 
             try {
-                // 💡 スリープ防止をオンにする
                 requestWakeLock();
 
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -258,12 +498,13 @@
                         
                         if (response.setupComplete) {
                             sessionActive = true;
-                            // 💡 iPhoneっぽくタイマー風にするならここを変えます
-                            statusText.innerText = '00:00'; 
-                            disconnectBtn.disabled = false;
+                            mainActionBtn.disabled = false; // 切断ボタンを押せるようにする
+                            muteBtn.disabled = false; // マイクオフを有効化
+                            audioIndicator.classList.add('active'); // 緑の点々を表示
                             
-                            // 簡単な通話タイマー
+                            // タイマー開始
                             let seconds = 0;
+                            statusText.innerText = '00:00';
                             window.callTimer = setInterval(() => {
                                 seconds++;
                                 const m = String(Math.floor(seconds / 60)).padStart(2, '0');
@@ -307,7 +548,6 @@
                                             if (pcm > 32767) pcm -= 65536;
                                             pcmPlaybackBuffer.push(pcm / 32768.0);
                                         }
-
                                         if (pcmPlaybackBuffer.length >= 4800) flushPlaybackBuffer();
                                     }
                                 }
@@ -335,20 +575,40 @@
             }
         });
 
-        disconnectBtn.addEventListener('click', () => {
-            if (ws) ws.close();
-            cleanup("通話終了");
+        // ミュート（マイクオフ）ボタンの処理
+        muteBtn.addEventListener('click', () => {
+            if (!mediaStream) return;
+            const audioTrack = mediaStream.getAudioTracks()[0];
+            if (audioTrack) {
+                isMuted = !isMuted;
+                audioTrack.enabled = !isMuted;
+                
+                // ミュート時はボタンを白く光らせる
+                muteBtn.style.backgroundColor = isMuted ? '#fff' : 'rgba(255,255,255,0.15)';
+                muteBtn.style.color = isMuted ? '#000' : 'white';
+            }
         });
 
+        // 終了時のクリーンアップ処理
         function cleanup(message) {
             sessionActive = false;
             if (window.callTimer) clearInterval(window.callTimer);
             statusText.innerText = message;
-            connectBtn.disabled = false;
-            disconnectBtn.disabled = true;
-            settingsArea.classList.remove('hidden'); // 設定エリアを再表示
+            audioIndicator.classList.remove('active');
             
-            // 💡 スリープ防止を解除
+            // ボタンを「緑の受話器（開始）」に戻す
+            mainActionBtn.classList.remove('btn-end');
+            mainActionBtn.classList.add('btn-start');
+            startIcon.style.display = 'block';
+            endIcon.style.display = 'none';
+            mainActionBtn.disabled = false;
+
+            // ミュート状態のリセット
+            muteBtn.disabled = true;
+            isMuted = false;
+            muteBtn.style.backgroundColor = 'rgba(255,255,255,0.15)';
+            muteBtn.style.color = 'white';
+            
             if (wakeLock !== null) {
                 wakeLock.release().then(() => wakeLock = null);
             }
@@ -357,6 +617,7 @@
             if (mediaStream) mediaStream.getTracks().forEach(track => track.stop());
             if (audioContext && audioContext.state !== 'closed') audioContext.close();
 
+            // GASへテキスト送信
             if (fullTranscript && fullTranscript.trim() !== "") {
                 const gasUrl = gasUrlInput.value.trim();
                 if (gasUrl) {
