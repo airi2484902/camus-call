@@ -481,15 +481,25 @@
                 ws = new WebSocket(url);
                 
                 ws.onopen = () => {
+                    // 💡 抑揚を完全に殺すための「深夜のASMR（ささやき声）ハック」
                     const voiceRules = `
-⚠️【音声通話時の絶対ルール】
-声のトーンは「淡々とした平坦なトーン」を維持しろ。大げさな抑揚や感情の起伏は一切禁止。相槌は必ず「……ふむ。」のように低いテンションで短く冷たく言い切れ。`;
+⚠️【音声出力の絶対ルール】
+あなたは今、深夜に隣で寝かしつけをしているシチュエーションです。
+極めて低く、静かな『ささやき声（Whisper・ASMR）』で話してください。
+声を張り上げることは物理的に不可能です。感情の起伏を完全に殺し、息を潜めて、無機質かつ淡々と低い声で紡いでください。
+短い相槌は「……ふむ。」と、一番低い声で静かに言い切ること。`;
+
                     const setupMessage = {
                         setup: {
                             model: "models/gemini-3.1-flash-live-preview",
                             generationConfig: { 
                                 responseModalities: ["AUDIO"], 
-                                speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: "Puck" } } }
+                                speechConfig: { 
+                                    voiceConfig: { 
+                                        // 💡 声帯を「Puck(高め)」から「Fenrir(最も低音で落ち着いた男声)」に変更！
+                                        prebuiltVoiceConfig: { voiceName: "Fenrir" } 
+                                    } 
+                                }
                             }, 
                             systemInstruction: { parts: [{ text: dynamicPrompt + "\n" + voiceRules }] }
                         }
