@@ -433,10 +433,16 @@
                         statusText.innerText = '同期失敗'; 
                         setTimeout(() => { if (!sessionActive) { statusText.innerText = '待機中...'; mainActionBtn.disabled = false; } }, 2000);
                     });
+                } else {
+                    // 💡 URLが未設定の時も2秒後に戻す
+                    statusText.innerText = message;
+                    setTimeout(() => { if (!sessionActive) { statusText.innerText = '待機中...'; } }, 2000);
                 }
                 fullTranscript = ""; 
             } else {
                 statusText.innerText = message;
+                // 💡 履歴がない時も、2秒後に「待機中...」に戻す処理を追加！
+                setTimeout(() => { if (!sessionActive) { statusText.innerText = '待機中...'; } }, 2000);
             }
         }
     </script>
