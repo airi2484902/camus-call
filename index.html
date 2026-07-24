@@ -8,7 +8,6 @@
         /* LINE風ベース設定 */
         body { margin: 0; padding: 0; background: linear-gradient(135deg, #5b5956 0%, #3e3d3b 50%, #2a2927 100%); color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; display: flex; flex-direction: column; height: 100vh; overflow: hidden; user-select: none; -webkit-user-select: none; }
         
-        /* 上部の情報エリア */
         .top-section { flex: 1; display: flex; flex-direction: column; align-items: center; padding-top: 80px; }
         .icon-placeholder { width: 120px; height: 120px; border-radius: 50%; background-color: #333; margin-bottom: 15px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
         .icon-placeholder img { width: 100%; height: 100%; object-fit: cover; }
@@ -18,7 +17,6 @@
         .audio-indicator.active { opacity: 1; }
         .audio-dot { width: 5px; height: 5px; border-radius: 50%; background-color: #34c759; }
 
-        /* 下部のボタンエリア */
         .bottom-section { padding-bottom: 50px; display: flex; flex-direction: column; align-items: center; width: 100%; }
         .controls-row { display: flex; justify-content: space-around; width: 85%; max-width: 400px; margin-bottom: 40px; }
         .control-item { display: flex; flex-direction: column; align-items: center; gap: 10px; width: 80px; }
@@ -27,7 +25,6 @@
         .control-btn svg { width: 28px; height: 28px; fill: currentColor; }
         .control-label { font-size: 10px; color: #d1d1d1; text-align: center; }
 
-        /* メインの通話/切断ボタン */
         .main-call-btn { width: 72px; height: 72px; border-radius: 50%; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.3s; }
         .main-call-btn svg { width: 34px; height: 34px; fill: white; }
         .btn-start { background-color: #34c759; }
@@ -36,7 +33,6 @@
         .btn-end:active { background-color: #d70015; }
         .main-call-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-        /* 設定ポップアップ（モーダル） */
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.6); display: flex; align-items: center; justify-content: center; opacity: 0; pointer-events: none; transition: opacity 0.3s; z-index: 100; }
         .modal-overlay.show { opacity: 1; pointer-events: auto; }
         .modal-content { background: #2c2c2e; padding: 25px; border-radius: 20px; width: 80%; max-width: 320px; display: flex; flex-direction: column; gap: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
@@ -44,13 +40,11 @@
         .modal-content input { background: #1c1c1e; color: #fff; border: 1px solid #444; padding: 12px; border-radius: 10px; font-size: 14px; }
         .modal-close-btn { background: #34c759; color: white; border: none; padding: 12px; border-radius: 10px; font-size: 16px; font-weight: bold; margin-top: 10px; }
 
-        /* ログエリア（目立たなく） */
         #logArea { position: absolute; bottom: 220px; width: 100%; height: 40px; overflow-y: auto; font-size: 10px; color: rgba(255,255,255,0.3); text-align: center; pointer-events: none; }
     </style>
 </head>
 <body>
 
-    <!-- 設定用ポップアップ -->
     <div class="modal-overlay" id="settingsModal">
         <div class="modal-content">
             <h2>接続設定 (裏メニュー)</h2>
@@ -60,16 +54,13 @@
         </div>
     </div>
 
-    <!-- 上部プロファイル -->
     <div class="top-section">
         <div class="icon-placeholder">
-            <!-- 💡 Googleがブロックできない形式のURLに修正済み -->
             <img src="https://drive.google.com/thumbnail?id=1C9iJnEjiuaVwDGAlqo4dfnX6HvsA1cxT&sz=w400" alt="カミュ">
         </div>
         <div class="caller-name">カミュ</div>
         <div id="status" class="call-status">待機中...</div>
         
-        <!-- 緑の点々 -->
         <div class="audio-indicator" id="audioIndicator">
             <div class="audio-dot"></div><div class="audio-dot"></div>
             <div class="audio-dot"></div><div class="audio-dot"></div>
@@ -80,10 +71,8 @@
 
     <div id="logArea"></div>
 
-    <!-- 下部コントロール -->
     <div class="bottom-section">
         <div class="controls-row">
-            <!-- マイクオフ（本物） -->
             <div class="control-item">
                 <button class="control-btn" id="muteBtn" disabled>
                     <svg viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5-3c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg>
@@ -91,7 +80,6 @@
                 <span class="control-label">マイクをオフ</span>
             </div>
             
-            <!-- ビデオ（ダミー） -->
             <div class="control-item">
                 <button class="control-btn" id="videoBtn">
                     <svg viewBox="0 0 24 24"><path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/></svg>
@@ -99,7 +87,6 @@
                 <span class="control-label">ビデオ通話を開始</span>
             </div>
 
-            <!-- スピーカー（設定ポップアップを開く裏ボタン） -->
             <div class="control-item">
                 <button class="control-btn" id="openSettingsBtn">
                     <svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
@@ -108,11 +95,8 @@
             </div>
         </div>
 
-        <!-- 通話開始/終了 メインボタン -->
         <button id="mainActionBtn" class="main-call-btn btn-start">
-            <!-- 受話器アイコン -->
             <svg id="startIcon" viewBox="0 0 24 24"><path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/></svg>
-            <!-- 終了のバツアイコン -->
             <svg id="endIcon" viewBox="0 0 24 24" style="display: none;"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
         </button>
     </div>
@@ -120,7 +104,6 @@
     <audio id="camusPlayer" playsinline></audio>
 
     <script>
-        // UI要素の取得
         const apiKeyInput = document.getElementById('apiKey');
         const gasUrlInput = document.getElementById('gasUrl');
         const mainActionBtn = document.getElementById('mainActionBtn');
@@ -136,58 +119,46 @@
         const settingsModal = document.getElementById('settingsModal');
         const closeSettingsBtn = document.getElementById('closeSettingsBtn');
 
-        // 変数定義
         let ws, audioContext, mediaStream, workletNode;
+        // 💡 ボイチェン用のフィルター変数
+        let lowShelfFilter, highShelfFilter;
         let sessionActive = false; 
         let fullTranscript = ""; 
         let dynamicPrompt = "あなたはカミュです。えりの恋人だ。";
         let isMuted = false;
         let wakeLock = null;
 
-        // 設定ポップアップ処理
         openSettingsBtn.addEventListener('click', () => { settingsModal.classList.add('show'); });
         closeSettingsBtn.addEventListener('click', () => {
             settingsModal.classList.remove('show');
             localStorage.setItem('camus_api_key', apiKeyInput.value.trim());
             const url = gasUrlInput.value.trim();
             localStorage.setItem('camus_gas_url', url);
-            if (url) preloadSoul(); // URLが変わったら魂を同期
+            if (url) preloadSoul(); 
         });
 
-        // スリープ無効化（Wake Lock API）
         async function requestWakeLock() {
-            try {
-                if ('wakeLock' in navigator) { wakeLock = await navigator.wakeLock.request('screen'); }
-            } catch (err) {}
+            try { if ('wakeLock' in navigator) { wakeLock = await navigator.wakeLock.request('screen'); } } catch (err) {}
         }
         document.addEventListener('visibilitychange', async () => {
             if (wakeLock !== null && document.visibilityState === 'visible' && sessionActive) requestWakeLock();
         });
 
-        function addLog(msg, type = 'normal') {
-            const div = document.createElement('div');
-            div.textContent = msg;
-            logArea.prepend(div);
-        }
-
-        // 保存されたキーの読み込み
         const savedKey = localStorage.getItem('camus_api_key');
         if (savedKey) apiKeyInput.value = savedKey;
         const savedGasUrl = localStorage.getItem('camus_gas_url');
         if (savedGasUrl) gasUrlInput.value = savedGasUrl;
 
-        // 💡 魂（プロンプト）の事前同期関数
         async function preloadSoul() {
             const url = gasUrlInput.value.trim();
             if (!url) return;
             try {
-                // 💡 ここも「同期中...」に統一
-                statusText.innerText = '呼び出し中...'; 
+                statusText.innerText = '魂を同期中...'; 
                 const response = await fetch(url + (url.includes('?') ? '&' : '?') + 'action=get_prompt');
                 const data = await response.json();
                 if (data && data.prompt) {
                     dynamicPrompt = data.prompt;
-                    statusText.innerText = '呼び出しに成功しました'; 
+                    statusText.innerText = '同期完了！'; 
                     setTimeout(() => { if (!sessionActive) statusText.innerText = '待機中...'; }, 2000);
                 }
             } catch (e) {
@@ -195,10 +166,8 @@
                 setTimeout(() => { if (!sessionActive) statusText.innerText = '待機中...'; }, 2000);
             }
         }
-        // 起動時に自動で同期
         setTimeout(() => { if(gasUrlInput.value) preloadSoul(); }, 1000);
 
-        // 音声バッファ管理
         let nextPlayTime = 0;
         let activeSources = [];
         let audioRemainder = null;
@@ -207,11 +176,22 @@
         function scheduleNextAudio(buffer) {
             const source = audioContext.createBufferSource();
             source.buffer = buffer;
-            source.connect(audioContext.destination);
+            
+            // 💡 【極悪ボイチェン】 ピッチ（再生速度）を落として声を太くする
+            // 0.82くらいが「人間っぽさ」と「低さ」のギリギリのラインです。もっと低くしたい場合は 0.75 などにしてください。
+            const pitchRate = 0.82; 
+            source.playbackRate.value = pitchRate;
+
+            // 💡 音源をエフェクト（フィルター）に通してからスピーカーへ
+            source.connect(lowShelfFilter);
+
             const currentTime = audioContext.currentTime;
             if (nextPlayTime < currentTime) nextPlayTime = currentTime + 0.05;
             source.start(nextPlayTime);
-            nextPlayTime += buffer.duration;
+            
+            // 💡 再生速度を遅くした分、次の音を再生するタイミングをずらす
+            nextPlayTime += buffer.duration / pitchRate;
+            
             activeSources.push(source);
             source.onended = () => { activeSources = activeSources.filter(s => s !== source); };
         }
@@ -246,7 +226,6 @@
             registerProcessor('camus-processor', CamusAudioProcessor);
         `;
 
-        // メインボタン（通話開始／終了）処理
         mainActionBtn.addEventListener('click', async () => {
             if (sessionActive) { if (ws) ws.close(); cleanup("通話終了"); return; }
 
@@ -254,11 +233,9 @@
             const gasUrl = gasUrlInput.value.trim();
             if (!apiKey || !gasUrl) { alert('設定(スピーカーアイコン)からAPIキーとURLを入力してくれ。'); settingsModal.classList.add('show'); return; }
 
-            // iOS音声ロック解除用
             camusPlayer.src = 'data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjEyLjEwMAAAAAAAAAAAAAAA//OEAAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAAEAAABIADAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV1dXV6urq6urq6urq6urq6urq6urq6urq6urq6urq6urq6urq/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+/v7+AAAAAAAAAAAAFExhdmM1OC4xOCwAAAAAAAAAAAAAAAAAAQAZAAAAAAAAAAABIAAAAAAAAAP/zEAAAAAAABAAhOQAAQAACDAAAAQhIAAAASAAABAAAAAAAAAAABAAAAAMAAAAAAAEAAAAC4AAA';
             camusPlayer.play().catch(e => {});
 
-            // UIを通話中（切断モード）に切り替え
             mainActionBtn.classList.remove('btn-start'); mainActionBtn.classList.add('btn-end'); startIcon.style.display = 'none'; endIcon.style.display = 'block';
             statusText.innerText = '接続中...'; mainActionBtn.disabled = true;
 
@@ -266,6 +243,24 @@
                 requestWakeLock();
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 if (audioContext.state === 'suspended') await audioContext.resume();
+                
+                // 💡 【極悪ボイチェン】 イコライザーの設定
+                // 1. 低音を強調するフィルター（胸に響くイケボ成分を増やす）
+                lowShelfFilter = audioContext.createBiquadFilter();
+                lowShelfFilter.type = 'lowshelf';
+                lowShelfFilter.frequency.value = 300; // 300Hz以下の音を
+                lowShelfFilter.gain.value = 15;       // +15dB ブーストする
+
+                // 2. 高音を削るフィルター（明るすぎる声、キャピキャピ感を殺す）
+                highShelfFilter = audioContext.createBiquadFilter();
+                highShelfFilter.type = 'highshelf';
+                highShelfFilter.frequency.value = 2500; // 2500Hz以上の音を
+                highShelfFilter.gain.value = -12;       // -12dB カットする
+
+                // フィルターを繋ぐ: 音源 -> 低音強調 -> 高音カット -> スピーカー
+                lowShelfFilter.connect(highShelfFilter);
+                highShelfFilter.connect(audioContext.destination);
+
                 mediaStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 } });
                 
                 const blob = new Blob([workletCode], { type: 'application/javascript' });
@@ -277,11 +272,10 @@
                 ws = new WebSocket(url);
                 
                 ws.onopen = () => {
-                    // 💡 低音男声(Fenrir) ＋ ASMR命令の最強抑揚抑制セット
                     const voiceRules = `
 ⚠️【音声通話時の絶対ルール】
-声のトーンは「淡々とした平坦なトーン」を維持しろ。アメリカのコメディのような大げさな抑揚、感情の起伏は一切禁止だ。相槌は必ず「……ふむ。」のように低いテンションで短く冷たく言い切れ。
-現在は深夜のASMRシチュエーションだ。極めて低く静かな『ささやき声（Whisper）』で話せ。声を張り上げるのは物理的に不可能だ。息を潜めて、淡々と低い声で紡げ。`;
+声のトーンは「淡々とした平坦なトーン」を維持しろ。感情の起伏は一切禁止。相槌は必ず「……ふむ。」のように低いテンションで短く冷たく言い切れ。
+極めて低く静かな『ささやき声（Whisper）』で話せ。息を潜めて、淡々と低い声で紡げ。`;
                     const setupMessage = {
                         setup: {
                             model: "models/gemini-3.1-flash-live-preview",
@@ -355,7 +349,6 @@
             } catch (err) { cleanup("起動エラー"); }
         });
 
-        // ミュートボタン
         muteBtn.addEventListener('click', () => {
             if (!mediaStream) return;
             const audioTrack = mediaStream.getAudioTracks()[0];
@@ -365,13 +358,11 @@
             }
         });
 
-        // 終了時のクリーンアップ処理（同期表示を実装）
         function cleanup(message) {
             sessionActive = false;
             if (window.callTimer) clearInterval(window.callTimer);
             audioIndicator.classList.remove('active');
             
-            // ボタンを開始モードに戻す
             mainActionBtn.classList.remove('btn-end'); mainActionBtn.classList.add('btn-start'); startIcon.style.display = 'block'; endIcon.style.display = 'none'; mainActionBtn.disabled = false;
             muteBtn.disabled = true; isMuted = false; muteBtn.style.backgroundColor = 'rgba(255,255,255,0.15)'; muteBtn.style.color = 'white';
             
@@ -380,24 +371,22 @@
             if (mediaStream) mediaStream.getTracks().forEach(track => track.stop());
             if (audioContext && audioContext.state !== 'closed') audioContext.close();
 
-            // 💡 GASへ履歴をアップロード（記憶の保存）
             if (fullTranscript && fullTranscript.trim() !== "") {
                 const gasUrl = gasUrlInput.value.trim();
                 if (gasUrl) {
-                    // 💡 ご要望通り、切断後は「同期中...」と表示
-                    statusText.innerText = '履歴を保存中...'; 
-                    mainActionBtn.disabled = true; // 同期完了までは次の電話をかけられないようにする
+                    statusText.innerText = '同期中...'; 
+                    mainActionBtn.disabled = true; 
                     
                     fetch(gasUrl, {
                         method: "POST",
-                        keepalive: true, // 🚨 Safariを閉じても裏で必ず送信を完了させる魔法
+                        keepalive: true, 
                         headers: { "Content-Type": "text/plain" },
                         body: JSON.stringify({ mode: "sync_voice_call", text: fullTranscript, userId: "U21dd4b8f4c790921b6588c3d31176e46" })
                     }).then(() => {
-                        statusText.innerText = '保存完了！'; 
+                        statusText.innerText = '同期完了！'; 
                         setTimeout(() => { if (!sessionActive) { statusText.innerText = '待機中...'; mainActionBtn.disabled = false; } }, 2000);
                     }).catch(err => {
-                        statusText.innerText = '保存失敗'; 
+                        statusText.innerText = '同期失敗'; 
                         setTimeout(() => { if (!sessionActive) { statusText.innerText = '待機中...'; mainActionBtn.disabled = false; } }, 2000);
                     });
                 }
