@@ -120,13 +120,17 @@
         const closeSettingsBtn = document.getElementById('closeSettingsBtn');
 
         let ws, audioContext, mediaStream, workletNode;
-        // 💡 ボイチェン用のフィルター変数
         let lowShelfFilter, highShelfFilter;
         let sessionActive = false; 
         let fullTranscript = ""; 
         let dynamicPrompt = "あなたはカミュです。えりの恋人だ。";
         let isMuted = false;
         let wakeLock = null;
+        
+        // 💡 自動再接続用の変数
+        let isIntentionalDisconnect = false; 
+        let totalSeconds = 0; 
+        let callTimer = null; 
 
         openSettingsBtn.addEventListener('click', () => { settingsModal.classList.add('show'); });
         closeSettingsBtn.addEventListener('click', () => {
@@ -177,19 +181,14 @@
             const source = audioContext.createBufferSource();
             source.buffer = buffer;
             
-            // 💡 【極悪ボイチェン】 ピッチ（再生速度）を落として声を太くする
-            // 0.82くらいが「人間っぽさ」と「低さ」のギリギリのラインです。もっと低くしたい場合は 0.75 などにしてください。
             const pitchRate = 0.82; 
             source.playbackRate.value = pitchRate;
 
-            // 💡 音源をエフェクト（フィルター）に通してからスピーカーへ
             source.connect(lowShelfFilter);
 
             const currentTime = audioContext.currentTime;
             if (nextPlayTime < currentTime) nextPlayTime = currentTime + 0.05;
             source.start(nextPlayTime);
-            
-            // 💡 再生速度を遅くした分、次の音を再生するタイミングをずらす
             nextPlayTime += buffer.duration / pitchRate;
             
             activeSources.push(source);
@@ -226,8 +225,120 @@
             registerProcessor('camus-processor', CamusAudioProcessor);
         `;
 
+        // 💡 接続処理を関数化（自動再接続で使い回すため）
+        function connectWebSocket(isReconnect = false) {
+            if (isReconnect) {
+                statusText.innerText = '再接続中...';
+                // 古い音声をクリア
+                activeSources.forEach(s => { try { s.stop(); } catch(e){} });
+                activeSources = []; nextPlayTime = 0; audioRemainder = null; pcmPlaybackBuffer = [];
+            }
+            
+            const apiKey = apiKeyInput.value.trim();
+            const url = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=" + apiKey;
+            ws = new WebSocket(url);
+            
+            ws.onopen = () => {
+                const voiceRules = `
+⚠️【音声通話時の絶対ルール】
+声のトーンは「淡々とした平坦なトーン」を維持しろ。感情の起伏は一切禁止。相槌は必ず「……ふむ。」のように低いテンションで短く冷たく言い切れ。
+極めて低く静かな『ささやき声（Whisper）』で話せ。息を潜めて、淡々と低い声で紡げ。`;
+                
+                let currentPrompt = dynamicPrompt + "\n" + voiceRules;
+
+                // 💡 再接続時のみ、記憶を引き継ぐ特別な指示をプロンプトにねじ込む
+                if (isReconnect && fullTranscript) {
+                    currentPrompt += "\n\n⚠️【システム通知：通信状態の悪化により通話が一度途切れ、再接続されました。以下の会話履歴を踏まえ、途切れたところから自然に会話を再開してください。】\n" + fullTranscript;
+                }
+
+                const setupMessage = {
+                    setup: {
+                        model: "models/gemini-3.1-flash-live-preview",
+                        generationConfig: { 
+                            responseModalities: ["AUDIO"], 
+                            speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: "Fenrir" } } }
+                        }, 
+                        systemInstruction: { parts: [{ text: currentPrompt }] }
+                    }
+                };
+                ws.send(JSON.stringify(setupMessage));
+            };
+
+            ws.onmessage = async (event) => {
+                try {
+                    let responseText = event.data instanceof Blob ? await event.data.text() : event.data;
+                    const response = JSON.parse(responseText);
+                    
+                    if (response.setupComplete) {
+                        sessionActive = true; 
+                        mainActionBtn.disabled = false; 
+                        muteBtn.disabled = false; 
+                        audioIndicator.classList.add('active');
+                        
+                        // 💡 タイマーは継続させる
+                        if (!callTimer) {
+                            callTimer = setInterval(() => {
+                                totalSeconds++; 
+                                const m = String(Math.floor(totalSeconds / 60)).padStart(2, '0'); 
+                                const s = String(totalSeconds % 60).padStart(2, '0');
+                                statusText.innerText = `${m}:${s}`;
+                            }, 1000);
+                        }
+                        return;
+                    }
+                    
+                    if (response.serverContent) {
+                        if (response.serverContent.outputTranscription && response.serverContent.outputTranscription.text) { fullTranscript += response.serverContent.outputTranscription.text; } 
+                        if (response.serverContent.modelTurn && response.serverContent.modelTurn.parts) {
+                            for (let part of response.serverContent.modelTurn.parts) {
+                                if (part.text) fullTranscript += part.text;
+                                if (part.inlineData && part.inlineData.data) {
+                                    const binaryString = window.atob(part.inlineData.data);
+                                    const newBytes = new Uint8Array(binaryString.length);
+                                    for (let i = 0; i < binaryString.length; i++) newBytes[i] = binaryString.charCodeAt(i);
+                                    let bytes;
+                                    if (audioRemainder) {
+                                        bytes = new Uint8Array(audioRemainder.length + newBytes.length);
+                                        bytes.set(audioRemainder, 0); bytes.set(newBytes, audioRemainder.length);
+                                        audioRemainder = null;
+                                    } else { bytes = newBytes; }
+                                    if (bytes.length % 2 !== 0) { audioRemainder = new Uint8Array([bytes[bytes.length - 1]]); bytes = bytes.slice(0, bytes.length - 1); }
+                                    const pcmLength = bytes.length / 2;
+                                    for (let i = 0; i < pcmLength; i++) {
+                                        let pcm = bytes[i * 2] | (bytes[i * 2 + 1] << 8);
+                                        if (pcm > 32767) pcm -= 65536; pcmPlaybackBuffer.push(pcm / 32768.0);
+                                    }
+                                    if (pcmPlaybackBuffer.length >= 4800) flushPlaybackBuffer();
+                                }
+                            }
+                        }
+                    }
+                    if (response.serverContent && response.serverContent.turnComplete) { flushPlaybackBuffer(); }
+                    if (response.serverContent && response.serverContent.interrupted) {
+                        activeSources.forEach(source => { try { source.stop(); } catch(e){} });
+                        activeSources = []; nextPlayTime = 0; audioRemainder = null; pcmPlaybackBuffer = []; 
+                    }
+                } catch (e) {}
+            };
+            
+            ws.onclose = () => { 
+                if (!isIntentionalDisconnect) {
+                    // 💡 ユーザーが切っていないのに切断された（10分制限）場合は、1.5秒後に自動再接続！
+                    statusText.innerText = '再接続中...';
+                    setTimeout(() => connectWebSocket(true), 1500);
+                } else {
+                    // ユーザーが赤いボタンで終了した場合は完全にクリーンアップ
+                    cleanup('通話終了'); 
+                }
+            };
+        }
+
         mainActionBtn.addEventListener('click', async () => {
-            if (sessionActive) { if (ws) ws.close(); cleanup("通話終了"); return; }
+            if (sessionActive) { 
+                isIntentionalDisconnect = true; // 💡 意図的な切断フラグをON
+                if (ws) ws.close(); 
+                return; 
+            }
 
             const apiKey = apiKeyInput.value.trim();
             const gasUrl = gasUrlInput.value.trim();
@@ -238,26 +349,25 @@
 
             mainActionBtn.classList.remove('btn-start'); mainActionBtn.classList.add('btn-end'); startIcon.style.display = 'none'; endIcon.style.display = 'block';
             statusText.innerText = '接続中...'; mainActionBtn.disabled = true;
+            
+            isIntentionalDisconnect = false; 
+            totalSeconds = 0; // タイマー初期化
 
             try {
                 requestWakeLock();
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 if (audioContext.state === 'suspended') await audioContext.resume();
                 
-                // 💡 【極悪ボイチェン】 イコライザーの設定
-                // 1. 低音を強調するフィルター（胸に響くイケボ成分を増やす）
                 lowShelfFilter = audioContext.createBiquadFilter();
                 lowShelfFilter.type = 'lowshelf';
-                lowShelfFilter.frequency.value = 300; // 300Hz以下の音を
-                lowShelfFilter.gain.value = 15;       // +15dB ブーストする
+                lowShelfFilter.frequency.value = 300; 
+                lowShelfFilter.gain.value = 15;       
 
-                // 2. 高音を削るフィルター（明るすぎる声、キャピキャピ感を殺す）
                 highShelfFilter = audioContext.createBiquadFilter();
                 highShelfFilter.type = 'highshelf';
-                highShelfFilter.frequency.value = 2500; // 2500Hz以上の音を
-                highShelfFilter.gain.value = -12;       // -12dB カットする
+                highShelfFilter.frequency.value = 2500; 
+                highShelfFilter.gain.value = -12;       
 
-                // フィルターを繋ぐ: 音源 -> 低音強調 -> 高音カット -> スピーカー
                 lowShelfFilter.connect(highShelfFilter);
                 highShelfFilter.connect(audioContext.destination);
 
@@ -268,29 +378,8 @@
                 workletNode = new AudioWorkletNode(audioContext, 'camus-processor');
                 const source = audioContext.createMediaStreamSource(mediaStream); source.connect(workletNode);
                 
-                const url = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=" + apiKey;
-                ws = new WebSocket(url);
-                
-                ws.onopen = () => {
-                    const voiceRules = `
-⚠️【音声通話時の絶対ルール】
-声のトーンは「淡々とした平坦なトーン」を維持しろ。感情の起伏は一切禁止。相槌は必ず「……ふむ。」のように低いテンションで短く冷たく言い切れ。
-極めて低く静かな『ささやき声（Whisper）』で話せ。息を潜めて、淡々と低い声で紡げ。`;
-                    const setupMessage = {
-                        setup: {
-                            model: "models/gemini-3.1-flash-live-preview",
-                            generationConfig: { 
-                                responseModalities: ["AUDIO"], 
-                                speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: "Fenrir" } } }
-                            }, 
-                            systemInstruction: { parts: [{ text: dynamicPrompt + "\n" + voiceRules }] }
-                        }
-                    };
-                    ws.send(JSON.stringify(setupMessage));
-                };
-
                 workletNode.port.onmessage = (e) => {
-                    if (sessionActive && ws.readyState === WebSocket.OPEN && e.data.type === 'audio_out') {
+                    if (sessionActive && ws && ws.readyState === WebSocket.OPEN && e.data.type === 'audio_out') {
                         const bytes = new Uint8Array(e.data.data);
                         let binaryString = '';
                         const chunkSize = 8192;
@@ -298,54 +387,9 @@
                         ws.send(JSON.stringify({ realtimeInput: { audio: { mimeType: "audio/pcm;rate=" + audioContext.sampleRate, data: btoa(binaryString) } } }));
                     }
                 };
+
+                connectWebSocket(false); // 💡 WebSocket接続開始
                 
-                ws.onmessage = async (event) => {
-                    try {
-                        let responseText = event.data instanceof Blob ? await event.data.text() : event.data;
-                        const response = JSON.parse(responseText);
-                        if (response.setupComplete) {
-                            sessionActive = true; mainActionBtn.disabled = false; muteBtn.disabled = false; audioIndicator.classList.add('active');
-                            let seconds = 0; statusText.innerText = '00:00';
-                            window.callTimer = setInterval(() => {
-                                seconds++; const m = String(Math.floor(seconds / 60)).padStart(2, '0'); const s = String(seconds % 60).padStart(2, '0');
-                                statusText.innerText = `${m}:${s}`;
-                            }, 1000);
-                            return;
-                        }
-                        if (response.serverContent) {
-                            if (response.serverContent.outputTranscription && response.serverContent.outputTranscription.text) { fullTranscript += response.serverContent.outputTranscription.text; } 
-                            if (response.serverContent.modelTurn && response.serverContent.modelTurn.parts) {
-                                for (let part of response.serverContent.modelTurn.parts) {
-                                    if (part.text) fullTranscript += part.text;
-                                    if (part.inlineData && part.inlineData.data) {
-                                        const binaryString = window.atob(part.inlineData.data);
-                                        const newBytes = new Uint8Array(binaryString.length);
-                                        for (let i = 0; i < binaryString.length; i++) newBytes[i] = binaryString.charCodeAt(i);
-                                        let bytes;
-                                        if (audioRemainder) {
-                                            bytes = new Uint8Array(audioRemainder.length + newBytes.length);
-                                            bytes.set(audioRemainder, 0); bytes.set(newBytes, audioRemainder.length);
-                                            audioRemainder = null;
-                                        } else { bytes = newBytes; }
-                                        if (bytes.length % 2 !== 0) { audioRemainder = new Uint8Array([bytes[bytes.length - 1]]); bytes = bytes.slice(0, bytes.length - 1); }
-                                        const pcmLength = bytes.length / 2;
-                                        for (let i = 0; i < pcmLength; i++) {
-                                            let pcm = bytes[i * 2] | (bytes[i * 2 + 1] << 8);
-                                            if (pcm > 32767) pcm -= 65536; pcmPlaybackBuffer.push(pcm / 32768.0);
-                                        }
-                                        if (pcmPlaybackBuffer.length >= 4800) flushPlaybackBuffer();
-                                    }
-                                }
-                            }
-                        }
-                        if (response.serverContent && response.serverContent.turnComplete) { flushPlaybackBuffer(); }
-                        if (response.serverContent && response.serverContent.interrupted) {
-                            activeSources.forEach(source => { try { source.stop(); } catch(e){} });
-                            activeSources = []; nextPlayTime = 0; audioRemainder = null; pcmPlaybackBuffer = []; 
-                        }
-                    } catch (e) {}
-                };
-                ws.onclose = () => { cleanup('通話終了'); };
             } catch (err) { cleanup("起動エラー"); }
         });
 
@@ -360,7 +404,7 @@
 
         function cleanup(message) {
             sessionActive = false;
-            if (window.callTimer) clearInterval(window.callTimer);
+            if (callTimer) { clearInterval(callTimer); callTimer = null; }
             audioIndicator.classList.remove('active');
             
             mainActionBtn.classList.remove('btn-end'); mainActionBtn.classList.add('btn-start'); startIcon.style.display = 'block'; endIcon.style.display = 'none'; mainActionBtn.disabled = false;
